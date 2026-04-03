@@ -1,0 +1,651 @@
+import { defineStore } from 'pinia'
+import api from '../utils/api'
+
+export const useAdminStore = defineStore('admin', {
+  state: () => ({
+    // Website CMS Sections
+    siteContent: {
+      home: { 
+        carousel: [], 
+        megaPromos: [], 
+        videoBlock: { perks: [] },
+        vipBanner: {},
+        whatWeDo: {},
+        categories: [],
+        trustFeatures: [],
+        productSections: { newArrivals: {}, mostPopular: {} },
+        newsletter: {}
+      },
+      standard: { features: [] },
+      process: { hero: {}, steps: [], cta: {} },
+      contact: { direct: { phone: [] } },
+      policies: { 
+        shippingAndReturns: { 
+          pageTitle: '', 
+          shippingProcess: { title: '', content: '' },
+          refundPolicy: { title: '', content: '' }
+        },
+        faq: { 
+          pageTitle: '', 
+          items: [] 
+        },
+        privacy: { 
+          pageTitle: '', 
+          content: '' 
+        }
+      }
+    },
+
+    // CRM & Business Data
+    products: [],
+    orders: [],
+    customers: [],
+    
+    // Employee & Operations Data
+    employees: [],
+    attendance: [],
+    attendanceAuditLog: [],
+    payroll: [],
+    
+    // Marketing & Inbox
+    inquiries: [],
+    blogs: [],
+    subscribers: [],
+    
+    // Financials & Partners
+    inventoryInvoices: [],
+    inventoryReport: { summary: {}, records: [] },
+    inventoryLastKey: null,
+    dashboardStats: null,
+    s3BucketUrl: import.meta.env.VITE_S3_BUCKET_URL || 'https://weardynamite-dev-assets.s3.ap-southeast-2.amazonaws.com/',
+    vendors: [],
+    ledger: [],
+    expenses: [],
+    vendorTransactions: [],
+    
+    // UI State
+    loading: false,
+    error: null,
+    imagePreview: {
+      show: false,
+      images: [],
+      currentIndex: 0
+    }
+  }),
+
+  getters: {
+    getVendorBalance: (state) => (vendorId) => {
+      const transactions = (state.vendorTransactions || []).filter(t => String(t.vendorId) === String(vendorId))
+      const bills = transactions.filter(t => t.type === 'Bill').reduce((sum, t) => sum + t.amount, 0)
+      const payments = transactions.filter(t => t.type === 'Payment').reduce((sum, t) => sum + t.amount, 0)
+      return bills - payments
+    },
+    getVendorHistory: (state) => (vendorId) => {
+      return (state.vendorTransactions || [])
+        .filter(t => String(t.vendorId) === String(vendorId))
+        .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+    }
+  },
+
+  actions: {
+    // ─── Initializer ─────────────────────────────────────────────────────────────
+    async init() {
+      await this.fetchProducts();
+      await this.fetchCms();
+      this.fetchVendors();
+      this.fetchEmployees();
+      this.fetchInventoryInvoices();
+      this.fetchInventoryReport();
+      this.fetchDashboardStats();
+    },
+
+    // ─── Utility Actions ─────────────────────────────────────────────────────────
+    resolveImageUrl(path) {
+      if (!path) return '';
+      if (path.startsWith('http') || path.startsWith('data:image')) return path;
+      const baseUrl = this.s3BucketUrl.endsWith('/') ? this.s3BucketUrl : `${this.s3BucketUrl}/`;
+      return `${baseUrl}${path}`;
+    },
+
+    async getPresignedUrl(fileName, fileType, folder = 'inventory') {
+      try {
+        const response = await api.post('/admin/upload/presigned-url', { fileName, fileType, folder });
+        return response.data;
+      } catch (error) {
+        console.error('Failed to get presigned URL:', error);
+        throw error;
+      }
+    },
+
+    // ─── Product Actions ─────────────────────────────────────────────────────────
+    async fetchProducts() {
+      this.loading = true;
+      try {
+        const response = await api.get('/products/admin/products?limit=1000');
+        const data = response.data.items || response.data || [];
+        this.products = Array.isArray(data) ? data.map(p => ({
+            ...p,
+            id: p.productId || p.id
+        })) : [];
+      } catch (error) {
+        console.error('Failed to fetch products:', error);
+        this.products = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+    async addProduct(product) {
+      this.loading = true;
+      try {
+        const response = await api.post('/products/admin/products', product);
+        this.products.unshift(response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Failed to add product:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async updateProduct(product) {
+      this.loading = true;
+      try {
+        const response = await api.put(`/products/admin/products/${product.id}`, product);
+        const index = this.products.findIndex(p => String(p.id) === String(product.id));
+        if (index !== -1) this.products[index] = response.data;
+        return response.data;
+      } catch (error) {
+        console.error('Failed to update product:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async deleteProduct(id) {
+      this.loading = true;
+      try {
+        await api.delete(`/products/admin/products/${id}`);
+        this.products = this.products.filter(p => String(p.id) !== String(id));
+      } catch (error) {
+        console.error('Failed to delete product:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // ─── Order & Customer Actions ────────────────────────────────────────────────
+    async fetchOrders(search = '') {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/admin/orders', { params: { search } });
+        this.orders = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+        this.orders = [];
+        this.error = 'Connection to ordering system lost.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchCustomers() {
+      try {
+        const response = await api.get('/user/admin/users');
+        this.customers = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch customers:', error);
+        this.customers = [];
+      }
+    },
+    async updateOrderStatus(id, status) {
+      try {
+        await api.put(`/admin/orders/${id}/status`, { status });
+        const order = this.orders.find(o => String(o.id) === String(id));
+        if (order) order.status = status;
+        if (status === 'Delivered') this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+      } catch (error) {
+        console.error('Failed to update order status:', error);
+      }
+    },
+
+    // ─── Inventory Invoice Actions ───────────────────────────────────────────────
+    async fetchInventoryInvoices() {
+      try {
+        const response = await api.get('/inventory/invoices');
+        this.inventoryInvoices = response.data.items || [];
+      } catch (error) {
+        console.error('Failed to fetch inventory invoices:', error);
+        this.inventoryInvoices = [];
+      }
+    },
+    async fetchInvoiceDetail(invoiceId) {
+      this.loading = true;
+      try {
+        const response = await api.get(`/inventory/invoice/${invoiceId}`);
+        return response.data; // Returns { summary, items, lastEvaluatedKey }
+      } catch (error) {
+        console.error('Failed to fetch invoice details:', error);
+        return null;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async addInventoryInvoice(invoice) {
+       this.loading = true;
+       try {
+          const response = await api.post('/inventory/add', invoice);
+          // Refresh list to get the updated summary
+          this.fetchInventoryInvoices();
+          this.fetchInventoryReport();
+          return response.data;
+        } catch (error) {
+         console.error('Failed to add invoice:', error);
+         throw error;
+       } finally {
+         this.loading = false;
+       }
+    },
+    async updateInventoryInvoice(id, invoice) {
+       this.loading = true;
+       try {
+          const response = await api.put(`/products/admin/inventory/invoices/${id}`, invoice);
+          const index = this.inventoryInvoices.findIndex(inv => String(inv.id || inv.PK) === String(id));
+          if (index !== -1) this.inventoryInvoices[index] = response.data;
+          this.fetchProducts(); 
+          this.fetchInventoryReport();
+          return response.data;
+        } catch (error) {
+         console.error('Failed to update invoice:', error);
+         throw error;
+       } finally {
+         this.loading = false;
+       }
+    },
+    async updateInventoryStatus(invoiceId, status) {
+       this.loading = true;
+       try {
+          const response = await api.patch(`/inventory/invoice/${invoiceId}/status`, { status });
+          // Update the local list
+          const index = this.inventoryInvoices.findIndex(inv => 
+            (inv.invoice_number === invoiceId) || (inv.invoiceNumber === invoiceId)
+          );
+          if (index !== -1) {
+            this.inventoryInvoices[index] = { ...this.inventoryInvoices[index], status };
+          }
+          return response.data;
+        } catch (error) {
+         console.error('Failed to update status:', error);
+         throw error;
+       } finally {
+         this.loading = false;
+       }
+    },
+    async updateInventoryItemStatus(invoiceId, inventoryId, status) {
+       this.loading = true;
+       try {
+          const response = await api.patch(`/inventory/invoice/${invoiceId}/item/${inventoryId}/status`, { status });
+          // Update the local list
+          const index = this.inventoryReport.records.findIndex(r => r.inventory_id === inventoryId);
+          if (index !== -1) {
+            this.inventoryReport.records[index] = { ...this.inventoryReport.records[index], status };
+          }
+          return response.data;
+        } catch (error) {
+         console.error('Failed to update item status:', error);
+         throw error;
+       } finally {
+         this.loading = false;
+       }
+    },
+    async bulkUpdateInventoryStatus(updates) {
+       this.loading = true;
+       try {
+          const response = await api.patch('/inventory/bulk-status', { updates });
+          // Update the local list (Immediate UI feedback)
+          updates.forEach(u => {
+            const index = this.inventoryReport.records.findIndex(r => r.inventory_id === u.inventoryId);
+            if (index !== -1) {
+              this.inventoryReport.records[index] = { ...this.inventoryReport.records[index], status: u.status };
+            }
+          });
+          
+          // Re-fetch from server to ensure source of truth is synced
+          await this.fetchInventoryReport();
+          
+          return response.data;
+        } catch (error) {
+         console.error('Failed to update bulk status:', error);
+         throw error;
+       } finally {
+         this.loading = false;
+       }
+    },
+
+    async fetchDashboardStats() {
+      try {
+        const response = await api.get('/admin/dashboard/stats');
+        this.dashboardStats = response.data;
+      } catch (error) {
+        console.error('Failed to fetch dashboard stats:', error);
+      }
+    },
+    async fetchInventoryReport(filters = {}, append = false) {
+      this.loading = true;
+      try {
+        let url = '/inventory/items?limit=50';
+        
+        // Add pagination key if appending
+        if (append && this.inventoryLastKey) {
+          url += `&lastKey=${encodeURIComponent(this.inventoryLastKey)}`;
+        }
+
+        // Add filters to query string
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value && value !== 'All') {
+            url += `&${key}=${encodeURIComponent(value)}`;
+          }
+        });
+
+        const response = await api.get(url);
+        const newRecords = response.data.items || [];
+        this.inventoryLastKey = response.data.lastEvaluatedKey || null;
+
+        if (append) {
+          this.inventoryReport.records.push(...newRecords);
+        } else {
+          this.inventoryReport.records = newRecords;
+        }
+        
+        this.inventoryReport.summary = { 
+          totalSKUs: this.inventoryReport.records.length,
+          hasMore: !!this.inventoryLastKey
+        };
+      } catch (error) {
+        console.error('Failed to fetch inventory report:', error);
+        if (!append) {
+          this.inventoryReport = { summary: {}, records: [] };
+          this.inventoryLastKey = null;
+        }
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchInventoryInvoices() {
+      try {
+        const response = await api.get('/inventory/invoices');
+        this.inventoryInvoices = response.data.items || response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch invoices:', error);
+        this.inventoryInvoices = [];
+      }
+    },
+    async addInventoryInvoice(data) {
+      try {
+        const response = await api.post('/inventory/add', data);
+        this.inventoryInvoices.unshift(response.data);
+        this.fetchInventoryReport(); // Refresh stock view
+        return response.data;
+      } catch (error) {
+        console.error('Failed to add inventory:', error);
+        throw error;
+      }
+    },
+    async bulkUpdateInventoryStatus(updates) {
+      try {
+        await api.patch('/inventory/bulk-status', { updates });
+        this.fetchInventoryReport(); // Refresh current view
+        return { success: true };
+      } catch (error) {
+        console.error('Bulk update failed:', error);
+        throw error;
+      }
+    },
+    async fetchInvoiceDetail(invoiceNumber) {
+      try {
+        const response = await api.get(`/inventory/invoice/${invoiceNumber}`);
+        return response.data;
+      } catch (error) {
+        console.error('Failed fetch invoice detail:', error);
+      }
+    },
+    async updateInventoryInvoice(invoiceNumber, data) {
+       try {
+         await api.patch(`/inventory/invoice/${invoiceNumber}/status`, data);
+         this.fetchInventoryInvoices();
+       } catch (error) {
+         console.error('Failed update invoice:', error);
+       }
+    },
+    // ─── Financial Actions (Real API) ────────────────────────────────────────────
+    async fetchVendors() {
+      try {
+        const response = await api.get('/admin/vendors');
+        this.vendors = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch vendors:', error);
+        this.vendors = [];
+      }
+    },
+    async registerVendor(vendor) {
+      try {
+        const response = await api.post('/admin/vendors', vendor);
+        this.vendors.unshift(response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Failed to register vendor:', error);
+        throw error;
+      }
+    },
+    async fetchVendorHistory(vendorId) {
+      try {
+        const response = await api.get(`/admin/vendors/${vendorId}/transactions`);
+        const data = Array.isArray(response.data) ? response.data : [];
+        this.vendorTransactions = [...this.vendorTransactions.filter(t => String(t.vendorId) !== String(vendorId)), ...data];
+      } catch (error) {
+        console.error('Failed to fetch vendor history:', error);
+      }
+    },
+    async payVendorSettlement(vendorId, amount, note = '') {
+      try {
+        const response = await api.post(`/admin/vendors/${vendorId}/transactions`, {
+          date: new Date().toISOString().split('T')[0],
+          type: 'Payment',
+          amount,
+          description: note || 'Account Settlement'
+        });
+        this.vendorTransactions.unshift(response.data);
+        this.fetchExpenses();
+        this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+      } catch (error) {
+        console.error('Failed settlement:', error);
+        throw error;
+      }
+    },
+    async fetchExpenses() {
+      this.loading = true;
+      try {
+        const response = await api.get('/admin/expenses');
+        this.expenses = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch expenses:', error);
+        this.expenses = [];
+        this.error = 'Financial activity endpoint unreachable.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async addExpense(expense) {
+      try {
+        const response = await api.post('/admin/expenses', expense);
+        this.expenses.unshift(response.data);
+        this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        return response.data;
+      } catch (error) {
+        console.error('Failed to add expense:', error);
+        throw error;
+      }
+    },
+    async fetchDailySummary(date) {
+      this.loading = true;
+      try {
+        const response = await api.get(`/admin/ledger/daily/${date}`);
+        return response.data || { grossRevenue: 0, totalExpenses: 0, netProfit: 0, transactions: [] };
+      } catch (error) {
+        console.error('Failed daily summary:', error);
+        return { grossRevenue: 0, totalExpenses: 0, netProfit: 0, transactions: [] };
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // ─── Staff & Operations Actions ──────────────────────────────────────────────
+    async fetchEmployees() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/admin/employees');
+        this.employees = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch employees:', error);
+        this.employees = [];
+        this.error = 'Human Resources connection timeout.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async addEmployee(employee) {
+      try {
+        const response = await api.post('/admin/employees', employee);
+        this.employees.unshift(response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Failed add employee:', error);
+        throw error;
+      }
+    },
+    async markAttendance(data) {
+      try {
+        const response = await api.post('/admin/attendance', data);
+        const idx = this.attendance.findIndex(a => a.employeeId === data.employeeId && a.date === data.date);
+        if (idx !== -1) this.attendance[idx] = response.data;
+        else this.attendance.push(response.data);
+      } catch (error) {
+        console.error('Failed mark attendance:', error);
+      }
+    },
+    async processPayroll(payrollData) {
+      this.loading = true;
+      try {
+        const response = await api.post('/admin/payroll', payrollData);
+        this.payroll.unshift(response.data);
+        this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        return response.data;
+      } catch (error) {
+        console.error('Failed payroll:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    // ─── CMS Actions ─────────────────────────────────────────────────────────────
+    async fetchCms() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/admin/cms');
+        this.siteContent = response.data;
+      } catch (error) {
+        console.error('Failed to fetch CMS:', error);
+        this.error = 'Website architecture sync failed.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async updateCmsSection(section, data) {
+      try {
+        const response = await api.put(`/admin/cms/home/${section}`, data);
+        if (this.siteContent.home) {
+           this.siteContent.home[section] = response.data[section];
+        }
+      } catch (error) {
+        console.error(`Failed to update CMS ${section}:`, error);
+      }
+    },
+
+    // ─── Inbox & Marketing Actions ───────────────────────────────────────────────
+    async fetchInquiries() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/admin/inquiries');
+        this.inquiries = response.data.items || response.data || [];
+      } catch (error) {
+        console.error('Failed to fetch inquiries:', error);
+        this.inquiries = [];
+        this.error = 'Customer outreach system offline.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async updateInquiryStatus(id, status) {
+       try {
+         await api.patch(`/admin/inquiries/${id}/status`, { status });
+         const idx = this.inquiries.findIndex(i => String(i.id || i.inquiryId) === String(id));
+         if (idx !== -1) this.inquiries[idx].status = status;
+       } catch (error) {
+         console.error('Failed update inquiry:', error);
+       }
+    },
+    async fetchSubscribers() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const response = await api.get('/admin/subscribers');
+        this.subscribers = response.data.items || response.data || [];
+      } catch (error) {
+        console.error('Failed fetch subscribers:', error);
+        this.subscribers = [];
+        this.error = 'Subscriber database unreachable.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchBlogs() {
+      try {
+        const response = await api.get('/blogs/admin/list');
+        this.blogs = response.data.items || response.data || [];
+      } catch (error) {
+        console.error('Failed fetch blogs:', error);
+        this.blogs = [];
+      }
+    },
+
+    // ─── UI Helper Actions ───────────────────────────────────────────────────────
+    openImagePreview(images, index = 0) {
+      if (!images || !images.length) return
+      const rawImages = typeof images === 'string' ? [images] : images
+      this.imagePreview.images = rawImages.map(img => this.resolveImageUrl(img))
+      this.imagePreview.currentIndex = index
+      this.imagePreview.show = true
+    },
+    closeImagePreview() {
+      this.imagePreview.show = false
+    },
+    nextPreview() {
+      if (this.imagePreview.currentIndex < this.imagePreview.images.length - 1) {
+        this.imagePreview.currentIndex++
+      } else {
+        this.imagePreview.currentIndex = 0
+      }
+    },
+    prevPreview() {
+      if (this.imagePreview.currentIndex > 0) {
+        this.imagePreview.currentIndex--
+      } else {
+        this.imagePreview.currentIndex = this.imagePreview.images.length - 1
+      }
+    }
+  }
+})
