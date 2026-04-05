@@ -144,6 +144,88 @@ export const useAdminStore = defineStore('admin', {
       }
     },
 
+    // ─── Blog Engine Actions (Prioritized) ───────────────────────────────────────
+    async fetchBlogs() {
+      try {
+        const response = await api.get('/blogs/admin/list');
+        this.blogs = response.data.items || response.data || [];
+      } catch (error) {
+        console.error('Failed fetch blogs:', error);
+        this.blogs = [];
+      }
+    },
+    async addBlog(blog) {
+      try {
+        const response = await api.post('/blogs/admin', blog);
+        this.blogs.unshift(response.data);
+        this.showNotification('Success', 'Article created as Draft.', 'success');
+        return response.data;
+      } catch (error) {
+        this.showNotification('Error', 'Failed to create article.', 'error');
+        throw error;
+      }
+    },
+    async updateBlog(blog) {
+      try {
+        const response = await api.put(`/blogs/admin/${blog.id || blog.blogId}`, blog);
+        const updated = response.data;
+        const newId = updated.id || updated.blogId;
+        const oldId = blog.id || blog.blogId;
+
+        if (newId !== oldId) {
+          // A brand new Physical Copy was created (First edit to a Live article)
+          // We keep the old Live blog in the list and unshift the new staged one
+          this.blogs.unshift(updated);
+        } else {
+          // This is a standard update to an already staged version
+          const idx = this.blogs.findIndex(b => (b.id || b.blogId) === newId && b.SK === updated.SK);
+          if (idx !== -1) {
+            this.blogs[idx] = updated;
+          } else {
+            this.blogs.unshift(updated);
+          }
+        }
+        this.showNotification('Success', 'Changes saved to staging version.', 'success');
+        return updated;
+      } catch (error) {
+        this.showNotification('Error', 'Failed to save changes.', 'error');
+        throw error;
+      }
+    },
+    async publishBlog(stagedId) {
+       try {
+         const response = await api.post(`/blogs/admin/${stagedId}/publish`);
+         const liveRecord = response.data;
+         const originalId = liveRecord.id || liveRecord.blogId;
+
+         // 1. Remove the staged record from our local list
+         this.blogs = this.blogs.filter(b => (b.id || b.blogId) !== stagedId);
+         
+         // 2. Update or add the original Live record in our local list
+         const liveIdx = this.blogs.findIndex(b => (b.id || b.blogId) === originalId && (b.status === 'Live' || b.SK === 'VERSION#LIVE'));
+         if (liveIdx !== -1) {
+           this.blogs[liveIdx] = liveRecord;
+         } else {
+           this.blogs.unshift(liveRecord);
+         }
+
+         this.showNotification('Deployed', 'Story is now Live on the website.', 'success');
+         return liveRecord;
+       } catch (error) {
+         this.showNotification('Error', 'Deployment failed.', 'error');
+         throw error;
+       }
+    },
+    async deleteBlog(id) {
+      try {
+        await api.delete(`/blogs/admin/${id}`);
+        this.blogs = this.blogs.filter(b => (b.id || b.blogId) !== id);
+        this.showNotification('Deleted', 'Article and all versions removed.', 'success');
+      } catch (error) {
+        this.showNotification('Error', 'Failed to delete article.', 'error');
+      }
+    },
+
     // ─── Product Actions ─────────────────────────────────────────────────────────
     async fetchProducts() {
       this.loading = true;
@@ -412,9 +494,6 @@ export const useAdminStore = defineStore('admin', {
             }
           });
           
-          // Re-fetch from server to ensure source of truth is synced
-          await this.fetchInventoryReport();
-          
           return response.data;
         } catch (error) {
          console.error('Failed to update bulk status:', error);
@@ -481,52 +560,6 @@ export const useAdminStore = defineStore('admin', {
         console.error('Failed to fetch linkable inventory:', error);
         return [];
       }
-    },
-    async fetchInventoryInvoices() {
-      try {
-        const response = await api.get('/inventory/invoices');
-        this.inventoryInvoices = response.data.items || response.data || [];
-      } catch (error) {
-        console.error('Failed to fetch invoices:', error);
-        this.inventoryInvoices = [];
-      }
-    },
-    async addInventoryInvoice(data) {
-      try {
-        const response = await api.post('/inventory/add', data);
-        this.inventoryInvoices.unshift(response.data);
-        this.fetchInventoryReport(); // Refresh stock view
-        return response.data;
-      } catch (error) {
-        console.error('Failed to add inventory:', error);
-        throw error;
-      }
-    },
-    async bulkUpdateInventoryStatus(updates) {
-      try {
-        await api.patch('/inventory/bulk-status', { updates });
-        this.fetchInventoryReport(); // Refresh current view
-        return { success: true };
-      } catch (error) {
-        console.error('Bulk update failed:', error);
-        throw error;
-      }
-    },
-    async fetchInvoiceDetail(invoiceNumber) {
-      try {
-        const response = await api.get(`/inventory/invoice/${invoiceNumber}`);
-        return response.data;
-      } catch (error) {
-        console.error('Failed fetch invoice detail:', error);
-      }
-    },
-    async updateInventoryInvoice(invoiceNumber, data) {
-       try {
-         await api.patch(`/inventory/invoice/${invoiceNumber}/status`, data);
-         this.fetchInventoryInvoices();
-       } catch (error) {
-         console.error('Failed update invoice:', error);
-       }
     },
     // ─── Financial Actions (Real API) ────────────────────────────────────────────
     async fetchVendors() {
@@ -750,7 +783,7 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       this.error = null;
       try {
-        const response = await api.get('/admin/subscribers');
+        const response = await api.get('/subscriptions/admin/subscribers');
         this.subscribers = response.data.items || response.data || [];
       } catch (error) {
         console.error('Failed fetch subscribers:', error);
@@ -758,15 +791,6 @@ export const useAdminStore = defineStore('admin', {
         this.error = 'Subscriber database unreachable.';
       } finally {
         this.loading = false;
-      }
-    },
-    async fetchBlogs() {
-      try {
-        const response = await api.get('/blogs/admin/list');
-        this.blogs = response.data.items || response.data || [];
-      } catch (error) {
-        console.error('Failed fetch blogs:', error);
-        this.blogs = [];
       }
     },
 

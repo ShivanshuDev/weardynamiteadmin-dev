@@ -1,28 +1,39 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
-import { Plus, Search, Edit2, Trash2, Eye, Calendar, User, Image as ImageIcon, Save, ChevronLeft, BookOpen, ChevronRight, LayoutGrid, List } from 'lucide-vue-next'
+import { Plus, Search, Edit2, Trash2, Eye, Calendar, User, Image as ImageIcon, Save, ChevronLeft, BookOpen, ChevronRight, LayoutGrid, List, CheckCircle, Clock, AlertCircle } from 'lucide-vue-next'
 import { QuillEditor } from '@vueup/vue-quill'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
+import '../assets/blog-preview.css'
 
 const adminStore = useAdminStore()
-const isEditing = ref(false)
+const activeView = ref('LIST') // 'LIST' | 'EDIT' | 'PREVIEW'
 const currentBlog = ref({ title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft' })
+const tagString = ref('')
 
 // Search, Filter & View State
 const searchQuery = ref('')
 const viewMode = ref('grid') // 'grid' | 'table'
 const activeStatus = ref('All')
-const statuses = ['All', 'Published', 'Under Review', 'Draft', 'Scheduled', 'Inactive']
+const statuses = ['All', 'Live', 'Under Review', 'Draft', 'Inactive']
 const itemsPerPage = 8
 const currentPage = ref(1)
 
 const filteredBlogs = computed(() => {
-  let result = adminStore.blogs
+  let result = (adminStore.blogs || []).map(b => ({
+    ...b,
+    id: b.blogId || b.id,
+    uniqueUiId: `${b.blogId || b.id}-${b.status || b.SK}`
+  }))
   
   // Status Filter
   if (activeStatus.value !== 'All') {
-    result = result.filter(b => b.status === activeStatus.value)
+    const filterStatus = activeStatus.value
+    result = result.filter(b => {
+      const s = b.status || b.SK || ''
+      if (filterStatus === 'Live') return s === 'Live' || s === 'VERSION#LIVE'
+      return s === filterStatus
+    })
   }
 
   // Search Filter
@@ -38,46 +49,76 @@ const paginatedBlogs = computed(() => {
   return filteredBlogs.value.slice(start, start + itemsPerPage)
 })
 
-const totalPages = computed(() => Math.ceil(filteredBlogs.value.length / itemsPerPage))
-
 const editorOptions = {
   theme: 'snow',
   modules: {
     toolbar: [
       [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-      [{ 'font': [] }],
-      [{ 'size': ['small', false, 'large', 'huge'] }],
       ['bold', 'italic', 'underline', 'strike'],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'script': 'sub' }, { 'script': 'super' }],
       [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      [{ 'indent': '-1' }, { 'indent': '+1' }],
-      [{ 'direction': 'rtl' }, { 'align': [] }],
-      ['blockquote', 'code-block'],
-      ['link', 'image', 'video'],
-      ['clean']
+      ['link', 'image']
     ]
   },
   placeholder: 'Tell your story with rich details...'
 }
 
+const getStatusClass = (status) => {
+  return {
+    'bg-blue-600 text-white': status === 'VERSION#LIVE' || status === 'Live',
+    'bg-orange-500 text-white': status === 'Under Review',
+    'bg-slate-200 text-slate-600': status === 'Draft',
+    'bg-slate-400 text-white': status === 'Inactive'
+  }
+}
+
 const startNew = () => {
   currentBlog.value = { title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft' }
-  isEditing.value = true
+  tagString.value = ''
+  activeView.value = 'EDIT'
 }
 
 const editBlog = (blog) => {
-  currentBlog.value = { ...blog }
-  isEditing.value = true
+  const isLive = blog.status === 'Live' || blog.status === 'VERSION#LIVE'
+  currentBlog.value = { 
+    ...blog, 
+    id: blog.id || blog.blogId,
+    status: isLive ? 'Under Review' : (blog.status || 'Draft'),
+    _clonedFrom: isLive ? blog.title : null // Track the original live title for UI context
+  }
+  tagString.value = blog.tags ? blog.tags.join(', ') : ''
+  activeView.value = 'EDIT'
 }
 
-const saveBlog = () => {
-  if (currentBlog.value.id) {
-    adminStore.updateBlog(currentBlog.value)
-  } else {
-    adminStore.addBlog(currentBlog.value)
+const previewBlog = (blog) => {
+  currentBlog.value = { ...blog, id: blog.id || blog.blogId }
+  activeView.value = 'PREVIEW'
+}
+
+const deleteBlog = (blog) => {
+  const id = blog.id || blog.blogId
+  if (confirm('Delete this article and all versions permanently?')) {
+    adminStore.deleteBlog(id)
   }
-  isEditing.value = false
+}
+
+const saveBlog = async () => {
+  const blogData = { ...currentBlog.value, tags: tagString.value.split(',').map(t => t.trim()) }
+  if (blogData.id) {
+    await adminStore.updateBlog(blogData)
+  } else {
+    await adminStore.addBlog(blogData)
+  }
+  activeView.value = 'LIST'
+}
+
+const deployBlog = async (blog) => {
+   const id = blog.id || blog.blogId
+   try {
+     await adminStore.publishBlog(id)
+     if (activeView.value !== 'LIST') activeView.value = 'LIST'
+   } catch (error) {
+     console.error('Deployment Failed')
+   }
 }
 
 onMounted(() => {
@@ -86,300 +127,259 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-3xl font-black tracking-tight text-slate-900 italic uppercase">Blog Engine</h1>
-        <p class="text-slate-500 font-bold text-sm uppercase tracking-widest mt-1">Create & Manage Brand Narratives</p>
+  <div class="blog-design-root">
+    <div class="p-6 space-y-6">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-8">
+        <div>
+           <h1 class="text-3xl font-black italic uppercase tracking-tighter">Narrative Archives</h1>
+           <p class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-1">Staging & Production Pipeline Manager</p>
+        </div>
+        <button v-if="activeView === 'LIST'" @click="startNew" class="flex items-center gap-2 bg-black text-white px-8 py-3 rounded-full text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl">
+           <Plus :size="18" /> New Story
+        </button>
+        <button v-else @click="activeView = 'LIST'" class="flex items-center gap-2 text-slate-400 hover:text-black text-xs font-black uppercase tracking-widest transition-all">
+           <ChevronLeft :size="18" /> Back to Archives
+        </button>
       </div>
-      <button 
-        v-if="!isEditing"
-        @click="startNew"
-        class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"
-      >
-        <Plus size="18" /> New Article
-      </button>
-      <button 
-        v-else
-        @click="isEditing = false"
-        class="text-slate-400 hover:text-black flex items-center gap-2 font-black text-xs uppercase tracking-widest transition-colors"
-      >
-        <ChevronLeft size="18" /> Back to list
-      </button>
-    </div>
 
-    <!-- Search, Tabs & View Toggles -->
-    <div v-if="!isEditing" class="space-y-4">
-       <!-- Segmented Pill Control Tabs -->
-       <div class="flex items-center justify-between gap-6">
-          <div class="bg-slate-100/80 p-1 rounded-xl flex items-center gap-1">
-             <button 
-               v-for="status in statuses" 
-               :key="status"
-               @click="activeStatus = status; currentPage = 1"
-               :class="activeStatus === status ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30' : 'text-slate-500 hover:text-slate-900 hover:bg-white/50'"
-               class="px-5 py-2 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl flex items-center gap-2"
-             >
-                {{ status }}
-                <span :class="activeStatus === status ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-500'" class="px-1.5 py-0.5 rounded-md text-[8px]">{{ adminStore.blogs.filter(b => status === 'All' ? true : b.status === status).length }}</span>
-             </button>
-          </div>
-          
-          <div class="flex items-center gap-2 bg-slate-100/80 p-1 rounded-2xl">
-             <button 
-               @click="viewMode = 'grid'"
-               :class="viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'"
-               class="p-2 rounded-xl transition-all"
-               title="Grid View"
-             >
-                <LayoutGrid size="16" />
-             </button>
-             <button 
-               @click="viewMode = 'table'"
-               :class="viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'"
-               class="p-2 rounded-xl transition-all"
-               title="Table View"
-             >
-                <List size="16" />
-             </button>
-          </div>
-       </div>
+      <!-- VIEW 1: LIST -->
+      <div v-if="activeView === 'LIST'" class="space-y-8 animate-in">
+         <!-- Status Filters -->
+         <div class="flex items-center justify-between gap-6">
+            <div class="flex bg-slate-100/50 p-1 rounded-full border border-slate-100 overflow-x-auto">
+               <button 
+                 v-for="status in statuses" 
+                 :key="status"
+                 @click="activeStatus = status; currentPage = 1"
+                 :class="activeStatus === status ? 'bg-black text-white px-8' : 'text-slate-500 hover:text-black px-6'"
+                 class="py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-3 whitespace-nowrap"
+               >
+                  {{ status }}
+                  <span :class="activeStatus === status ? 'bg-white/20' : 'bg-slate-200'" class="px-2 py-0.5 rounded-full text-[8px]">
+                     {{ status === 'All' ? (adminStore.blogs || []).length : (adminStore.blogs || []).filter(b => {
+                        const s = b.status || b.SK || '';
+                        if (status === 'Live') return s === 'Live' || s === 'VERSION#LIVE';
+                        return s === status;
+                     }).length }}
+                  </span>
+               </button>
+            </div>
+            
+            <div class="flex bg-slate-100/50 p-1 rounded-full border border-slate-100 shrink-0">
+               <button @click="viewMode = 'grid'" :class="viewMode === 'grid' ? 'bg-white text-blue-600 shadow-xl' : 'text-slate-400'" class="p-2.5 rounded-full transition-all"><LayoutGrid size="18" /></button>
+               <button @click="viewMode = 'table'" :class="viewMode === 'table' ? 'bg-white text-blue-600 shadow-xl' : 'text-slate-400'" class="p-2.5 rounded-full transition-all"><List size="18" /></button>
+            </div>
+         </div>
 
-       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="relative flex-1 max-w-md">
-             <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size="18" />
-             <input 
-               v-model="searchQuery"
-               type="text" 
-               placeholder="Search narratives..." 
-               class="w-full pl-12 pr-6 py-2.5 bg-white border border-slate-100 rounded-xl text-[10px] font-black uppercase outline-none focus:border-blue-600 transition-all shadow-sm"
-             />
-          </div>
-          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">{{ paginatedBlogs.length }} of {{ filteredBlogs.length }} Visible</p>
-       </div>
-    </div>
+         <!-- Narrative Grid -->
+         <div v-if="viewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div v-for="blog in paginatedBlogs" :key="blog.uniqueUiId" class="group bg-white border border-slate-100 rounded-[2.5rem] overflow-hidden hover:shadow-2xl transition-all duration-500 flex flex-col">
+               <div class="aspect-[16/10] relative overflow-hidden">
+                  <img :src="blog.image" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                  <div class="absolute top-4 left-4">
+                     <span :class="getStatusClass(blog.status)" class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-xl border border-white/10">
+                        {{ blog.status === 'VERSION#LIVE' ? 'LIVE' : blog.status }}
+                     </span>
+                  </div>
+                  <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                     <button @click="previewBlog(blog)" class="p-4 bg-white rounded-full hover:bg-black hover:text-white transition-all transform hover:scale-110" title="Preview"><Eye :size="20"/></button>
+                     <button @click="editBlog(blog)" class="p-4 bg-white rounded-full hover:bg-blue-600 hover:text-white transition-all transform hover:scale-110" title="Edit"><Edit2 :size="20"/></button>
+                     <button @click="deleteBlog(blog)" class="p-4 bg-white rounded-full hover:bg-red-600 hover:text-white transition-all transform hover:scale-110" title="Delete"><Trash2 :size="20"/></button>
+                  </div>
+               </div>
+               <div class="p-8 space-y-4 flex-1 flex flex-col">
+                  <h3 class="font-black italic uppercase tracking-tighter text-sm mb-auto line-clamp-2 leading-tight group-hover:text-blue-600 transition-colors">{{ blog.title }}</h3>
+                  <div class="flex items-center justify-between pt-6 border-t border-slate-50">
+                     <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Calendar :size="14" /> {{ blog.date }}</span>
+                     <button v-if="blog.status !== 'Live' && blog.status !== 'VERSION#LIVE'" @click="deployBlog(blog)" class="text-[9px] font-black uppercase text-blue-600 hover:tracking-[0.2em] transition-all flex items-center gap-1">DEPLOY <ChevronRight :size="14"/></button>
+                     <span v-else class="text-[9px] font-black uppercase text-green-500 flex items-center gap-1"><CheckCircle :size="14" /> LIVE</span>
+                  </div>
+               </div>
+            </div>
+         </div>
 
-    <!-- Blog List Container -->
-    <div v-if="!isEditing" class="space-y-8">
-       
-       <!-- Conditional View Rendering -->
-       <template v-if="paginatedBlogs.length">
-          <!-- Grid View -->
-          <div v-if="viewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-             <div 
-              v-for="blog in paginatedBlogs" 
-              :key="blog.id"
-              class="bg-white rounded border border-slate-100 shadow-sm overflow-hidden group hover:shadow-2xl transition-all h-full flex flex-col"
-             >
-                <div class="aspect-[4/3] relative overflow-hidden flex-shrink-0">
-                   <img :src="blog.image" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                   <div class="absolute top-4 left-4">
-                      <span class="bg-black/40 backdrop-blur-md text-white border border-white/20 text-[9px] font-black uppercase px-3 py-1 rounded-lg tracking-widest">{{ blog.status }}</span>
-                   </div>
-                </div>
-                <div class="p-6 space-y-4 flex-1 flex flex-col">
-                   <div class="flex items-center justify-between text-[9px] font-black uppercase text-slate-400 tracking-widest">
-                      <div class="flex items-center gap-1"><Calendar size="12"/> {{ blog.date }}</div>
-                      <div class="flex items-center gap-1 truncate max-w-[80px]"><User size="12"/> {{ blog.author }}</div>
-                   </div>
-                   <h3 class="text-sm font-black text-slate-900 leading-tight group-hover:text-blue-600 transition-colors line-clamp-2 h-10 italic tracking-tight">{{ blog.title }}</h3>
-                   <div class="flex items-center gap-2 pt-2 mt-auto">
-                      <button @click="editBlog(blog)" class="flex-1 py-2.5 bg-slate-50 hover:bg-blue-600 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Configure</button>
-                      <button @click="adminStore.deleteBlog(blog.id)" class="p-2.5 border border-slate-100 hover:bg-red-50 text-red-500 rounded-xl transition-all"><Trash2 size="14"/></button>
-                   </div>
-                </div>
-             </div>
-          </div>
+         <!-- Table View Integration -->
+         <div v-else class="bg-white border border-slate-100 rounded-[2rem] overflow-hidden">
+            <table class="w-full text-left">
+               <thead class="bg-slate-50 border-b border-slate-100 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">
+                  <tr>
+                     <th class="px-8 py-5">Article Headline</th>
+                     <th class="px-8 py-5">Author</th>
+                     <th class="px-8 py-5">Status</th>
+                     <th class="px-8 py-5">Actions</th>
+                  </tr>
+               </thead>
+               <tbody class="divide-y divide-slate-50">
+                  <tr v-for="blog in paginatedBlogs" :key="blog.id" class="hover:bg-slate-50 transition-all group">
+                     <td class="px-8 py-5 font-black italic uppercase tracking-tighter text-sm">{{ blog.title }}</td>
+                     <td class="px-8 py-5 text-[10px] font-bold text-slate-500 uppercase">{{ blog.author }}</td>
+                     <td class="px-8 py-5">
+                       <span :class="getStatusClass(blog.status)" class="px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">
+                          {{ blog.status === 'VERSION#LIVE' ? 'LIVE' : blog.status }}
+                       </span>
+                     </td>
+                     <td class="px-8 py-5">
+                        <div class="flex items-center gap-3">
+                           <button @click="previewBlog(blog)" class="text-slate-400 hover:text-black" title="Preview"><Eye :size="18"/></button>
+                           <button @click="editBlog(blog)" class="text-slate-400 hover:text-blue-600" title="Edit"><Edit2 :size="18"/></button>
+                           <button @click="deleteBlog(blog)" class="text-slate-400 hover:text-red-500" title="Delete"><Trash2 :size="18"/></button>
+                        </div>
+                     </td>
+                  </tr>
+               </tbody>
+            </table>
+         </div>
+      </div>
 
-          <!-- Table View (Standardized h-14) -->
-          <div v-else class="bg-white rounded-[0.4rem] border border-slate-100 shadow-sm overflow-hidden">
-             <table class="w-full border-collapse">
-                <thead>
-                   <tr class="bg-slate-50/50 border-b border-slate-100">
-                      <th class="text-left px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest w-16">Sr. No</th>
-                      <th class="text-left px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Story Brief</th>
-                      <th class="text-left px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Assignee</th>
-                      <th class="text-left px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Metrics</th>
-                      <th class="text-left px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Lifecycle</th>
-                      <th class="text-right px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">Actions</th>
-                   </tr>
-                </thead>
-                <tbody>
-                   <tr v-for="(blog, index) in paginatedBlogs" :key="blog.id" class="border-b border-slate-50 hover:bg-slate-50/80 transition-all h-14 group">
-                      <td class="px-6 text-[10px] font-black text-slate-400 font-mono">
-                         {{ ((currentPage - 1) * itemsPerPage) + index + 1 }}
-                      </td>
-                      <td class="px-6">
-                         <div class="flex items-center gap-3">
-                            <img :src="blog.image" class="w-8 h-8 rounded-lg object-cover shadow-sm" />
-                            <span class="text-[10px] font-black text-slate-900 truncate max-w-[300px] italic tracking-tight">{{ blog.title }}</span>
-                         </div>
-                      </td>
-                      <td class="px-6 text-[10px] font-black text-slate-500 uppercase">{{ blog.author }}</td>
-                      <td class="px-6 text-[10px] font-black text-slate-400">{{ blog.date }}</td>
-                      <td class="px-6">
-                         <span :class="{
-                            'bg-blue-100 text-blue-600': blog.status === 'Published',
-                            'bg-orange-100 text-orange-600': blog.status === 'Under Review',
-                            'bg-purple-100 text-purple-600': blog.status === 'Scheduled',
-                            'bg-amber-100 text-amber-600': blog.status === 'Draft',
-                            'bg-slate-100 text-slate-500': blog.status === 'Inactive'
-                         }" class="text-[8px] font-black uppercase px-2 py-1 rounded-md tracking-widest">
-                            {{ blog.status }}
-                         </span>
-                      </td>
-                      <td class="px-6 text-right">
-                         <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button @click="editBlog(blog)" class="p-2 text-slate-400 hover:text-blue-600"><Edit2 size="14"/></button>
-                            <button @click="adminStore.deleteBlog(blog.id)" class="p-2 text-slate-400 hover:text-red-600"><Trash2 size="14"/></button>
-                         </div>
-                      </td>
-                   </tr>
-                </tbody>
-             </table>
-          </div>
-       </template>
+      <!-- VIEW 2: EDIT (Studio) -->
+      <div v-else-if="activeView === 'EDIT'" class="space-y-12 animate-in pb-32">
+         <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-6">
+               <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Edit2 :size="24" />
+               </div>
+               <div>
+                  <div class="flex items-center gap-3">
+                     <span class="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Configuration Studio</span>
+                     <span v-if="currentBlog._clonedFrom" class="bg-blue-600 text-white text-[8px] px-3 py-1 rounded-full font-black uppercase tracking-widest shadow-lg">Editing Story Version</span>
+                  </div>
+                  <h2 class="text-2xl font-black italic uppercase tracking-tighter mt-1">{{ currentBlog.id ? 'Refine Narrative' : 'Initialize New Story' }}</h2>
+                  <p v-if="currentBlog._clonedFrom" class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1 italic">Note: The live version of "{{ currentBlog._clonedFrom }}" remains active on site.</p>
+               </div>
+            </div>
+            <div class="flex gap-4">
+               <button @click="saveBlog" class="flex items-center gap-2 bg-black text-white px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest hover:bg-blue-600 transition-all">
+                  <Save :size="18" /> Save Working Version
+               </button>
+               <button v-if="currentBlog.id" @click="deployBlog(currentBlog)" class="flex items-center gap-2 bg-blue-600 text-white px-10 py-3 rounded-full text-xs font-black uppercase tracking-widest hover:bg-green-600 transition-all shadow-xl">
+                  Push to Production
+               </button>
+            </div>
+         </div>
 
-       <!-- Empty State -->
-       <div v-else class="p-20 flex flex-col items-center justify-center text-slate-300 gap-4 border-2 border-dashed border-slate-100 rounded-[3rem]">
-          <div class="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
-             <BookOpen size="40" />
-          </div>
-          <div class="text-center">
-             <p class="text-[10px] font-black uppercase tracking-widest">No matching narratives found</p>
-             <p class="text-[9px] font-bold text-slate-400 uppercase mt-1">Try adjusting your filters or create a new story</p>
-          </div>
-       </div>
+         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Sidebar: Metadata -->
+            <aside class="lg:col-span-4 space-y-6">
+               <div class="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
+                  <h2 class="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 italic">Global Attributes</h2>
+                  
+                  <div class="space-y-6">
+                     <!-- Lifecycle Status -->
+                     <div class="space-y-3">
+                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                           Lifecycle Status
+                           <div v-if="currentBlog._clonedFrom" class="group relative cursor-help">
+                              <AlertCircle :size="12" class="text-blue-500" />
+                              <div class="absolute bottom-full left-0 mb-2 w-48 p-2 bg-slate-800 text-white text-[8px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                 A staging copy of this live article is being created.
+                              </div>
+                           </div>
+                        </label>
+                        <select v-model="currentBlog.status" class="w-full bg-slate-50 border-none rounded-2xl px-6 py-4 text-xs font-bold text-slate-700 focus:ring-2 focus:ring-blue-100 transition-all outline-none appearance-none cursor-pointer">
+                           <option value="Draft">Draft (Internal)</option>
+                           <option value="Under Review">Under Review (Staging)</option>
+                           <option value="Inactive">Inactive (Archived/Hidden)</option>
+                        </select>
+                        <div v-if="currentBlog._clonedFrom" class="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50">
+                           <p class="text-[8px] text-blue-600 leading-relaxed font-bold uppercase tracking-widest italic">
+                              <Clock :size="10" class="inline mb-0.5 mr-1" /> This new version will automatically target "Under Review" to keep the live version safe.
+                           </p>
+                        </div>
+                     </div>
 
-       <!-- Pagination Footer -->
-       <div v-if="totalPages > 1" class="bg-white px-6 py-4 rounded-[0.4rem] border border-slate-100 flex items-center justify-between shadow-sm">
-          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Showing {{ Math.min(filteredBlogs.length, itemsPerPage) }} Narratives per Cycle</p>
-          <div class="flex items-center gap-2">
-             <button @click="currentPage--" :disabled="currentPage === 1" class="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronLeft size="14" /></button>
-             <div class="flex items-center gap-1">
-                <span v-for="p in totalPages" :key="p" @click="currentPage = p" :class="p === currentPage ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-600/20' : 'bg-white text-slate-400 border-slate-200 hover:border-blue-400'" class="w-7 h-7 flex items-center justify-center rounded-lg text-[10px] font-black border transition-all cursor-pointer">
-                   {{ p }}
-                </span>
-             </div>
-             <button @click="currentPage++" :disabled="currentPage === totalPages" class="p-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"><ChevronRight size="14" /></button>
-          </div>
-       </div>
-    </div>
+                     <div class="space-y-2">
+                        <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Story Headline</label>
+                        <input v-model="currentBlog.title" type="text" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-blue-600/10 outline-none" placeholder="Enter high-impact headline..." />
+                     </div>
 
-    <!-- Enhanced Editor Overlay -->
-    <div v-else class="bg-white p-10 rounded-[3px] border border-slate-100 shadow-2xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-       <div class="flex items-center justify-between border-b border-slate-50 pb-8">
-          <div class="flex items-center gap-6">
-             <div class="bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-600/20"><Edit2 size="24"/></div>
-             <div>
-                <h2 class="text-2xl font-black italic uppercase tracking-tighter">Compose Story</h2>
-                <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Rich Text Narratives & Visual Storytelling</p>
-             </div>
-          </div>
-          <div class="flex items-center gap-4">
-             <button @click="isEditing = false" class="text-xs font-black uppercase text-slate-400 hover:text-black">Discard Changes</button>
-             <button @click="saveBlog" class="bg-blue-600 text-white px-8 py-3 rounded-[3px] font-black text-xs uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-blue-600/20 hover:bg-black transition-all">
-                <Save size="18"/> {{ currentBlog.id ? 'Update Article' : 'Publish Story' }}
-             </button>
-          </div>
-       </div>
+                     <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                           <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Author</label>
+                           <input v-model="currentBlog.author" type="text" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" />
+                        </div>
+                        <div class="space-y-2">
+                           <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Labels (CSV)</label>
+                           <input v-model="tagString" type="text" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" placeholder="Style, Fashion..." />
+                        </div>
+                     </div>
 
-       <div class="grid grid-cols-1 lg:grid-cols-4 gap-10">
-          <!-- Main Editor Area -->
-          <div class="lg:col-span-3 space-y-10">
-             <div class="space-y-2 border-b-2 border-slate-50 pb-4">
-                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Captivating Headline</label>
-                <input v-model="currentBlog.title" type="text" placeholder="THE UNTOLD STORY OF DYNAMITE..." class="w-full text-5xl font-black italic tracking-tighter outline-none border-none placeholder:text-slate-100 uppercase" />
-             </div>
-             
-             <div class="quill-editor-container">
-                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-4 block">Article Content</label>
-                <QuillEditor 
-                   v-model:content="currentBlog.content" 
-                   content-type="html" 
-                   :options="editorOptions" 
-                   class="min-h-[600px] text-lg font-medium leading-relaxed"
-                />
-             </div>
-          </div>
-          
-          <!-- Sidebar Controls -->
-          <div class="space-y-8">
-             <div class="bg-slate-50 p-8 rounded-[3px] border border-slate-100 space-y-8 sticky top-8">
-                <div class="space-y-4">
-                   <div class="flex items-center gap-2">
-                      <ImageIcon size="14" class="text-blue-600" />
-                      <label class="text-[9px] font-black uppercase text-slate-800 tracking-widest">Featured Metadata</label>
-                   </div>
-                   <div class="aspect-video bg-white rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-300 overflow-hidden relative group">
-                      <img v-if="currentBlog.image" :src="currentBlog.image" class="w-full h-full object-cover" />
-                      <div v-else class="flex flex-col items-center">
-                        <ImageIcon size="30" />
-                        <span class="text-[9px] font-black uppercase mt-2">Upload Preview</span>
-                      </div>
-                      <input v-model="currentBlog.image" type="text" placeholder="Paste Cover Image URL..." class="absolute bottom-4 left-4 right-4 p-3 bg-white/95 backdrop-blur-md rounded-xl text-[9px] font-bold border border-slate-200 outline-none focus:border-blue-600 transition-colors" />
-                   </div>
-                </div>
+                     <div class="space-y-2">
+                        <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Hero Asset URL</label>
+                        <input v-model="currentBlog.image" type="text" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" placeholder="https://..." />
+                     </div>
+                  </div>
 
-                <div class="space-y-4 pt-4 border-t border-slate-200">
-                   <div class="space-y-2">
-                      <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Assign Author</label>
-                      <input v-model="currentBlog.author" class="w-full p-4 bg-white rounded-xl border border-slate-100 text-xs font-bold outline-none focus:border-blue-600 transition-colors" />
-                   </div>
-                   
-                   <div class="space-y-2">
-                      <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Publication Status</label>
-                      <select v-model="currentBlog.status" class="w-full p-4 bg-white rounded-xl border border-slate-100 text-xs font-bold outline-none cursor-pointer focus:border-blue-600 transition-colors">
-                         <option>Draft</option>
-                         <option>Published</option>
-                         <option>Scheduled</option>
-                         <option>Under Review</option>
-                         <option>Inactive</option>
-                      </select>
-                   </div>
-                </div>
+                  <div class="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex items-start gap-4">
+                     <AlertCircle class="text-amber-600 shrink-0" :size="20" />
+                     <p class="text-[9px] font-bold text-amber-900/70 leading-relaxed italic uppercase tracking-wider">Warning: If this article is already Live, saving as "Inactive" will stage a hidden version. The current version stays published until you Deploy the replacement.</p>
+                  </div>
+               </div>
+            </aside>
 
-                <div class="bg-blue-600/5 p-6 rounded-3xl border border-blue-100">
-                   <h4 class="text-[10px] font-black uppercase text-blue-900 tracking-widest mb-2 flex items-center gap-2">
-                      <Eye size="14"/> Preview Note
-                   </h4>
-                   <p class="text-[10px] font-medium text-blue-600 leading-relaxed">Your edits are live within the editor. Press Publish to commit changes to the global brand narrative.</p>
-                </div>
-             </div>
-          </div>
-       </div>
+            <!-- Main Content: Quill Form -->
+            <main class="lg:col-span-8">
+               <div class="bg-white rounded-[4rem] border border-slate-100 shadow-2xl overflow-hidden min-h-[800px]">
+                  <div class="bg-slate-50/80 px-8 py-3 border-b border-slate-100 flex items-center justify-between">
+                     <span class="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] font-mono italic">rich_text_editor.sys</span>
+                  </div>
+                  <div class="p-4 h-full">
+                     <QuillEditor 
+                       v-model:content="currentBlog.content" 
+                       contentType="html" 
+                       :options="editorOptions" 
+                       class="min-h-[700px]"
+                     />
+                  </div>
+               </div>
+            </main>
+         </div>
+      </div>
+
+      <!-- VIEW 3: PREVIEW (Website Mirror) -->
+      <div v-else-if="activeView === 'PREVIEW'" class="space-y-8 animate-in">
+         <div class="bg-white rounded-[4rem] border border-slate-100 shadow-3xl overflow-hidden min-h-[900px]">
+            <div class="bg-slate-50/80 px-8 py-4 border-b border-slate-100 flex items-center justify-between">
+               <div class="flex gap-2">
+                  <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                  <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                  <div class="w-3 h-3 rounded-full bg-green-400"></div>
+               </div>
+               <span class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] italic">Full Fidelity Website Mirror</span>
+               <button @click="activeView = 'EDIT'" class="text-[10px] bg-black text-white px-6 py-2 rounded-full font-black uppercase tracking-widest hover:bg-blue-600 transition-all">Switch to Editor</button>
+            </div>
+
+            <!-- Unified Website Styling Wrapper (Read Only) -->
+            <div class="p-16 article-detail max-w-5xl mx-auto">
+               <header class="blog-hero">
+                  <div class="card-meta">
+                     <span><Calendar :size="12" /> April 5, 2026</span>
+                     <span><User :size="12" /> BY {{ currentBlog.author }}</span>
+                  </div>
+                  <h1>{{ currentBlog.title || 'Untitled Narrative' }}</h1>
+                  <div class="accent-line"></div>
+               </header>
+
+               <div class="card-image mb-16 shadow-2xl rounded-lg overflow-hidden">
+                  <img v-if="currentBlog.image" :src="currentBlog.image" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-[400px] bg-slate-50 flex flex-col items-center justify-center text-slate-200">
+                     <ImageIcon :size="64" />
+                     <span class="text-[10px] font-black uppercase mt-6 tracking-widest">Narrative Asset Not Defined</span>
+                  </div>
+               </div>
+
+               <!-- Article Content Render -->
+               <article class="article-content" v-html="currentBlog.content || '<p>No content defined for this narrative yet.</p>'"></article>
+            </div>
+         </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style>
-/* Quill Theme Customization to match reduced radius and premium aesthetic */
-.quill-editor-container .ql-toolbar.ql-snow {
-  border: 1px solid #f1f5f9;
-  background: #f8fafc;
-  border-radius: 3px 3px 0 0;
-  padding: 12px;
-}
-
-.quill-editor-container .ql-container.ql-snow {
-  border: 1px solid #f1f5f9;
-  border-top: none;
-  border-radius: 0 0 3px 3px;
-  font-family: inherit;
-  font-size: 1.1rem;
-}
-
-.ql-editor {
-  min-height: 600px;
-  padding: 40px;
-}
-
-.ql-editor.ql-blank::before {
-  color: #e2e8f0;
-  font-style: italic;
-  left: 40px;
-}
+.ql-toolbar.ql-snow { border: none !important; border-bottom: 2px solid #f8fafc !important; background: #fff; padding: 24px !important; margin-bottom: 20px; }
+.ql-container.ql-snow { border: none !important; }
 
 /* Image alignment & Resizing CSS supports */
 .ql-editor img {

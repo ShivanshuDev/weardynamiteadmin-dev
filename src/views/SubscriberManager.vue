@@ -40,12 +40,16 @@ const filteredSubscribers = computed(() => {
   // Search
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    list = list.filter(s => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q) || s.phone.includes(q))
+    list = list.filter(s => 
+      (s.name?.toLowerCase() || '').includes(q) || 
+      (s.email?.toLowerCase() || '').includes(q) || 
+      (s.phone || '').includes(q)
+    )
   }
   
   // Filter: Interest
   if (selectedInterest.value) {
-    list = list.filter(s => s.interests.includes(selectedInterest.value))
+    list = list.filter(s => (s.interests || []).includes(selectedInterest.value))
   }
   
   // Filter: Source
@@ -347,18 +351,33 @@ const exportSubscribersToExcel = () => {
               <td class="pl-6 py-1.5 text-[10px] font-bold text-slate-300 italic">{{ String((currentPage-1)*itemsPerPage + idx + 1).padStart(2, '0') }}</td>
               <td class="px-4 py-1.5">
                 <div class="flex items-center gap-2">
-                   <div class="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-[10px] group-hover:bg-blue-600 transition-all">{{ sub.name[0] }}</div>
-                   <div class="flex flex-col select-none"><span class="text-xs font-black text-slate-900 leading-none">{{ sub.name }}</span><span class="text-[9px] font-bold text-slate-400 mt-0.5">{{ sub.email }}</span></div>
+                   <div class="w-8 h-8 bg-slate-900 text-white rounded-lg flex items-center justify-center font-black text-[10px] group-hover:bg-blue-600 transition-all">
+                     {{ (sub.name || 'A')[0].toUpperCase() }}
+                   </div>
+                   <div class="flex flex-col">
+                      <p class="text-[11px] font-black text-slate-900 uppercase tracking-tight">{{ sub.name || 'Anonymous Member' }}</p>
+                      <p class="text-[9px] font-bold text-slate-400 lowercase tracking-tighter">{{ sub.email }}</p>
+                   </div>
                 </div>
               </td>
-              <td class="px-4 py-1.5 text-[11px] font-bold text-slate-600">{{ sub.phone }}</td>
               <td class="px-4 py-1.5">
-                 <div class="flex flex-wrap gap-1">
-                    <span v-for="i in sub.interests" :key="i" class="px-2 py-0.5 bg-slate-50 text-slate-500 text-[8px] font-black uppercase tracking-widest border border-slate-100 rounded-md group-hover:text-blue-600 group-hover:bg-blue-50 transition-all">{{ i }}</span>
+                 <div class="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                    <Phone size="10" class="text-slate-300" />
+                    {{ sub.phone || 'N/A' }}
                  </div>
               </td>
-              <td class="px-4 py-1.5 text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1.5"><Activity size="10"/> {{ sub.lastActive }}</td>
-              <td class="px-4 py-1.5 text-right pr-6"><span class="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border border-slate-200 group-hover:text-blue-600 transition-all">{{ sub.source }}</span></td>
+              <td class="px-4 py-1.5">
+                <div class="flex flex-wrap gap-1">
+                  <span v-for="interest in (sub.interests || [])" :key="interest" class="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[8px] font-black uppercase rounded">
+                    {{ interest }}
+                  </span>
+                  <span v-if="!(sub.interests?.length)" class="text-[8px] font-bold text-slate-300 italic">No clusters yet</span>
+                </div>
+              </td>
+              <td class="px-4 py-1.5 text-[10px] font-bold text-slate-500">{{ sub.lastActive || 'Never' }}</td>
+              <td class="px-4 py-1.5 text-right pr-6">
+                <span class="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase tracking-widest">{{ sub.source || 'Direct' }}</span>
+              </td>
             </tr>
           </tbody>
         </table>

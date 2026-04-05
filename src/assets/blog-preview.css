@@ -1,0 +1,113 @@
+/* 
+  Shared Blog Design System for Admin Preview (Vanilla CSS)
+  Visual parity between Editor and Website
+*/
+
+.blog-design-root {
+  --blog-accent: #2563eb;
+  --blog-text-main: #0f172a;
+  --blog-text-muted: #64748b;
+  --blog-bg-card: #ffffff;
+  --blog-border: #f1f5f9;
+  --blog-font-serif: 'Serif', Georgia, 'Times New Roman', serif;
+}
+
+.article-preview-container {
+  background: white;
+  padding: 40px;
+  border: 1px solid var(--blog-border);
+  border-radius: 4px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.article-detail .blog-hero {
+  border-bottom: 2px solid var(--blog-border);
+  padding-bottom: 24px;
+  margin-bottom: 40px;
+}
+
+.article-detail h1 {
+  font-size: 3rem;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  line-height: 1.1;
+  color: var(--blog-text-main);
+}
+
+.article-detail .accent-line {
+  height: 4px;
+  width: 60px;
+  background: var(--blog-accent);
+  margin-bottom: 16px;
+}
+
+.article-detail .card-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--blog-text-muted);
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+  font-style: italic;
+}
+
+.article-detail .card-image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 2px;
+  margin-bottom: 32px;
+  background: #f8fafc;
+}
+
+.article-detail .card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Rich Text Content Styling */
+.article-content {
+  font-family: var(--blog-font-serif);
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--blog-text-main);
+}
+
+.article-content p {
+  margin-bottom: 1.25rem;
+}
+
+.article-content h2, .article-content h3 {
+  font-family: var(--blog-font-serif);
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+
+.article-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 2px;
+  margin: 1.5rem 0;
+}
+
+.article-content ul, .article-content ol {
+  margin-bottom: 1.25rem;
+  padding-left: 1.5rem;
+}
+
+/* Quill Editor Override for Preview */
+.ql-editor {
+  font-family: var(--blog-font-serif) !important;
+  font-size: 1.1rem !important;
+  line-height: 1.7 !important;
+  min-height: 400px;
+}

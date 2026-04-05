@@ -40,10 +40,25 @@ watch(fromDate, (newVal) => {
   }
 })
 
-const parseDDMMYYYY = (str) => {
-  if (!str) return new Date()
-  const [d, m, y] = str.split('-').map(Number)
-  return new Date(y, m - 1, d)
+const parseFlexibleDate = (item) => {
+  if (!item) return new Date(0)
+  
+  // 1. Try specifically for Subscribers DD-MM-YYYY
+  if (item.subscribedDate && typeof item.subscribedDate === 'string' && item.subscribedDate.includes('-')) {
+    const [d, m, y] = item.subscribedDate.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+
+  // 2. Try common date fields
+  const dStr = item.created_at || item.createdAt || item.date || item.timestamp || item.subscribedDate
+  if (!dStr) return new Date(0)
+
+  // 3. Handle Timestamps (Numeric)
+  if (!isNaN(dStr)) return new Date(Number(dStr))
+  
+  // 4. Handle ISO strings / JS Dates
+  const d = new Date(dStr)
+  return isNaN(d.getTime()) ? new Date(0) : d
 }
 
 const filteredData = computed(() => {
@@ -53,22 +68,25 @@ const filteredData = computed(() => {
   let end = new Date()
 
   if (selectedTimeframe.value === 'Last 7 Days') {
-    start.setDate(end.getDate() - 7)
+    start.setDate(end.getDate() - 7); start.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'Last 30 Days') {
-    start.setDate(end.getDate() - 30)
+    start.setDate(end.getDate() - 30); start.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'This Month') {
-    start = new Date(end.getFullYear(), end.getMonth(), 1)
+    start = new Date(end.getFullYear(), end.getMonth(), 1); start.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'Last Month') {
-    start = new Date(end.getFullYear(), end.getMonth() - 1, 1)
-    end = new Date(end.getFullYear(), end.getMonth(), 0)
+    start = new Date(end.getFullYear(), end.getMonth() - 1, 1); start.setHours(0,0,0,0)
+    end = new Date(end.getFullYear(), end.getMonth(), 0); end.setHours(23,59,59,999)
   } else if (selectedTimeframe.value === 'Custom Range') {
-    if (fromDate.value) start = new Date(fromDate.value)
-    if (toDate.value) end = new Date(toDate.value)
+    if (fromDate.value) { start = new Date(fromDate.value); start.setHours(0,0,0,0) }
+    if (toDate.value) { end = new Date(toDate.value); end.setHours(23,59,59,999) }
+  } else {
+    // Default to everything if not specified differently
+    start = new Date(0)
+    end = new Date(new Date().setFullYear(new Date().getFullYear() + 10))
   }
 
   return props.data.filter(item => {
-    const dStr = item.createdAt || item.date || item.subscribedDate
-    const itemDate = (item.subscribedDate) ? parseDDMMYYYY(item.subscribedDate) : new Date(dStr)
+    const itemDate = parseFlexibleDate(item)
     return itemDate >= start && itemDate <= end
   })
 })
@@ -82,29 +100,28 @@ const previousPeriodData = computed(() => {
   let prevStart = new Date()
 
   if (selectedTimeframe.value === 'Last 7 Days') {
-    start.setDate(end.getDate() - 7)
-    prevEnd.setDate(start.getDate() - 1)
-    prevStart.setDate(prevEnd.getDate() - 7)
+    start.setDate(end.getDate() - 7); start.setHours(0,0,0,0)
+    prevEnd.setDate(start.getDate() - 1); prevEnd.setHours(23,59,59,999)
+    prevStart.setDate(prevEnd.getDate() - 7); prevStart.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'Last 30 Days') {
-    start.setDate(end.getDate() - 30)
-    prevEnd.setDate(start.getDate() - 1)
-    prevStart.setDate(prevEnd.getDate() - 30)
+    start.setDate(end.getDate() - 30); start.setHours(0,0,0,0)
+    prevEnd.setDate(start.getDate() - 1); prevEnd.setHours(23,59,59,999)
+    prevStart.setDate(prevEnd.getDate() - 30); prevStart.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'This Month') {
-    start = new Date(end.getFullYear(), end.getMonth(), 1)
-    prevEnd = new Date(end.getFullYear(), end.getMonth(), 0)
-    prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1)
+    start = new Date(end.getFullYear(), end.getMonth(), 1); start.setHours(0,0,0,0)
+    prevEnd = new Date(end.getFullYear(), end.getMonth(), 0); prevEnd.setHours(23,59,59,999)
+    prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1); prevStart.setHours(0,0,0,0)
   } else if (selectedTimeframe.value === 'Last Month') {
-    start = new Date(end.getFullYear(), end.getMonth() - 1, 1)
-    end = new Date(end.getFullYear(), end.getMonth(), 0)
-    prevEnd = new Date(start.getFullYear(), start.getMonth(), 0)
-    prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1)
+    start = new Date(end.getFullYear(), end.getMonth() - 1, 1); start.setHours(0,0,0,0)
+    end = new Date(end.getFullYear(), end.getMonth(), 0); end.setHours(23,59,59,999)
+    prevEnd = new Date(start.getFullYear(), start.getMonth(), 0); prevEnd.setHours(23,59,59,999)
+    prevStart = new Date(prevEnd.getFullYear(), prevEnd.getMonth(), 1); prevStart.setHours(0,0,0,0)
   } else {
     return []
   }
 
   return props.data.filter(item => {
-    const dStr = item.createdAt || item.date || item.subscribedDate
-    const itemDate = (item.subscribedDate) ? parseDDMMYYYY(item.subscribedDate) : new Date(dStr)
+    const itemDate = parseFlexibleDate(item)
     return itemDate >= prevStart && itemDate <= prevEnd
   })
 })
@@ -112,8 +129,7 @@ const previousPeriodData = computed(() => {
 const trendChartData = computed(() => {
   const groups = {}
   filteredData.value.forEach(item => {
-    const dStr = item.createdAt || item.date || item.subscribedDate
-    const d = (item.subscribedDate) ? parseDDMMYYYY(item.subscribedDate) : new Date(dStr)
+    const d = parseFlexibleDate(item)
     const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
     groups[label] = (groups[label] || 0) + (props.type === 'inventory' ? (item.stock || 0) : 1)
   })
@@ -350,16 +366,18 @@ const chartOptions = {
 
       <!-- KPI Scoreboard -->
       <div class="px-10 pb-6 grid grid-cols-4 gap-6">
-         <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
             <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Gross Volume</p>
             <div class="flex items-end justify-between mt-2">
-               <h4 class="text-2xl font-black text-slate-900">{{ filteredData.length }}</h4>
+               <h4 class="text-2xl font-black text-slate-900">
+                 {{ props.type === 'inventory' ? filteredData.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0) : filteredData.length }}
+               </h4>
                <div v-if="previousPeriodData.length" class="flex items-center gap-1 text-[10px] font-black" :class="filteredData.length >= previousPeriodData.length ? 'text-emerald-500' : 'text-red-500'">
                   {{ filteredData.length >= previousPeriodData.length ? '↑' : '↓' }}
                   {{ Math.abs(((filteredData.length - previousPeriodData.length) / previousPeriodData.length) * 100).toFixed(0) }}%
                </div>
             </div>
-         </div>
+          </div>
          <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
             <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Avg Value</p>
             <div class="flex items-end justify-between mt-2">
