@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Zap, TrendingUp, AlertTriangle, ArrowUpRight, CheckCircle2 } from 'lucide-vue-next'
 import { useAdminStore } from '../stores/adminStore'
 import { 
@@ -18,7 +18,8 @@ import {
   PointElement, 
   CategoryScale, 
   BarElement,
-  ArcElement
+  ArcElement,
+  Filler
 } from 'chart.js'
 
 ChartJS.register(
@@ -30,7 +31,8 @@ ChartJS.register(
   PointElement, 
   CategoryScale, 
   BarElement,
-  ArcElement
+  ArcElement,
+  Filler
 )
 
 const adminStore = useAdminStore()
@@ -44,51 +46,20 @@ const timeframes = [
   'Daily', 'Weekly', '2 Weeks', 'Monthly', 'Quarterly', 
   'Half Yearly', 'Yearly', 'Previous Week', 'Previous Month', 'Previous Year'
 ]
-const selectedTimeframe = ref('Monthly')
+const selectedTimeframe = ref('2 Weeks')
 
-// Helper to filter and group data by timeframe
-const processChartData = (type) => {
-  const now = new Date()
-  let labels = []
-  let dataPoints = []
-  
-  // Minimal implementation for demonstration - in a real app, this would be highly complex
-  // based on the selectedTimeframe. We'll generate realistic mock-like patterns for now 
-  // that roughly correlate with real store totals.
-  
-  const timeframeMap = {
-    'Daily': 24,
-    'Weekly': 7,
-    '2 Weeks': 14,
-    'Monthly': 30,
-    'Quarterly': 90,
-    'Half Yearly': 180,
-    'Yearly': 365
-  }
+watch(selectedTimeframe, (newVal) => {
+  adminStore.fetchDashboardAnalytics(newVal)
+})
 
-  const periods = timeframeMap[selectedTimeframe.value] || 30
-  
-  for (let i = periods - 1; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    labels.push(d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }))
-    
-    // Simulate data based on store totals dispersed over time
-    const baseValue = type === 'orders' ? (props.orders.length / periods) : (128430 / periods)
-    const randomFactor = 0.5 + Math.random()
-    dataPoints.push(Math.round(baseValue * randomFactor))
-  }
-
-  return { labels, dataPoints }
-}
 
 const ordersChartData = computed(() => {
-  const { labels, dataPoints } = processChartData('orders')
+  const data = adminStore.revenueChart || []
   return {
-    labels,
+    labels: data.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
     datasets: [{
-      label: 'Order Volume',
-      data: dataPoints,
+      label: 'Money Flow (In)',
+      data: data.map(d => d.revenue),
       borderColor: '#3b82f6',
       backgroundColor: 'rgba(59, 130, 246, 0.1)',
       fill: true,
@@ -99,13 +70,13 @@ const ordersChartData = computed(() => {
 })
 
 const profitLossChartData = computed(() => {
-  const { labels, dataPoints } = processChartData('profit')
+  const data = adminStore.revenueChart || []
   return {
-    labels,
+    labels: data.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
     datasets: [
       {
-        label: 'Gross Profit',
-        data: dataPoints,
+        label: 'Gross Revenue',
+        data: data.map(d => d.revenue),
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         fill: true,
@@ -113,8 +84,8 @@ const profitLossChartData = computed(() => {
         pointRadius: 0
       },
       {
-        label: 'Operating Loss',
-        data: dataPoints.map(v => Math.round(v * 0.2)),
+        label: 'Operational Loss',
+        data: data.map(d => d.expense),
         borderColor: '#ef4444',
         backgroundColor: 'rgba(239, 68, 68, 0.05)',
         fill: true,
@@ -173,28 +144,36 @@ const orderStatusData = computed(() => {
 
 const paymentMethodData = computed(() => {
   const counts = {}
-  props.orders.forEach(o => {
-    const m = o.paymentMethod || 'Razorpay'
+  const orders = props.orders || []
+  orders.forEach(o => {
+    // Correct mapping for PayU, COD, for institutional transparency
+    const m = o.paymentMethod || o.payment_method || 'Unknown'
     counts[m] = (counts[m] || 0) + 1
   })
+  
+  const labels = Object.keys(counts)
   return {
-    labels: Object.keys(counts),
+    labels,
     datasets: [{
       data: Object.values(counts),
-      backgroundColor: ['#1d4ed8', '#0f172a', '#64748b', '#ec4899'],
+      backgroundColor: labels.map(l => {
+        if (l === 'PayU') return '#1d4ed8' // PayU Blue
+        if (l === 'COD') return '#64748b' // Slate Gray
+        if (l === 'Razorpay') return '#3b82f6' // Sky Blue
+        return '#0f172a' // Default Dark
+      }),
       borderWidth: 0
     }]
   }
 })
 
 const topProductsData = computed(() => {
-  // Sort products by stock or mock performance
-  const sorted = [...props.products].sort((a,b) => (b.stock || 0) - (a.stock || 0)).slice(0, 5)
+  const data = adminStore.topProducts || []
   return {
-    labels: sorted.map(p => p.name.substring(0, 10) + '...'),
+    labels: data.map(p => p.name.length > 12 ? p.name.substring(0, 10) + '...' : p.name),
     datasets: [{
       label: 'Units Sold',
-      data: sorted.map(p => Math.floor(Math.random() * 100) + 50),
+      data: data.map(p => p.quantity),
       backgroundColor: '#3b82f6',
       borderRadius: 4
     }]
@@ -252,8 +231,16 @@ const chartOptions = {
     }
   },
   scales: {
-    x: { display: false },
-    y: { display: false }
+    x: { 
+      display: true,
+      grid: { display: false },
+      ticks: { font: { size: 9, weight: 'bold' }, color: '#94a3b8' }
+    },
+    y: { 
+      display: true,
+      grid: { color: '#f1f5f9' },
+      ticks: { font: { size: 9, weight: 'bold' }, color: '#94a3b8' }
+    }
   }
 }
 
@@ -290,7 +277,7 @@ const doughnutOptions = {
               <p class="text-[10px] text-slate-400 font-bold uppercase mt-1">Profit vs Loss Analysis</p>
             </div>
             <div class="text-right">
-              <p class="text-xl font-black text-emerald-600">₹42.8k</p>
+              <p class="text-xl font-black text-emerald-600">₹{{ (financialStats.profit / 1000).toFixed(1) }}k</p>
               <p class="text-[9px] font-black uppercase text-slate-400 tracking-tighter">Est. Net Margin</p>
             </div>
          </div>

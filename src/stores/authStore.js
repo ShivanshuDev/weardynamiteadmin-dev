@@ -7,8 +7,13 @@ import { signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopu
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(JSON.parse(localStorage.getItem('dynamite_admin_user')) || null)
   const token = ref(localStorage.getItem('dynamite_admin_token') || null)
+  const sidebarVisible = ref(true)
 
   const isAuthenticated = computed(() => !!token.value)
+
+  const toggleSidebar = () => {
+    sidebarVisible.value = !sidebarVisible.value
+  }
 
   const login = async (email, password) => {
     try {
@@ -25,6 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Standard Firebase Login
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const jwt = await userCredential.user.getIdToken(true);
+      console.log('[AUTH DEBUG] Extraction of fresh Admin ID token successful.');
       
       // Temporarily set token for Axios interceptor
       token.value = jwt
@@ -55,6 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
       const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
       const jwt = await userCredential.user.getIdToken(true);
+      console.log('[AUTH DEBUG] Extraction of fresh Admin Google ID token successful.');
       
       token.value = jwt
       localStorage.setItem('dynamite_admin_token', token.value)
@@ -91,6 +98,8 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     login,
     loginWithGoogle,
-    logout
+    logout,
+    sidebarVisible,
+    toggleSidebar
   }
 })

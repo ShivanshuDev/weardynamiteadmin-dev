@@ -17,7 +17,8 @@ import {
   ShieldAlert,
   Wallet,
   Building2,
-  Receipt
+  Receipt,
+  PanelLeftClose
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -55,7 +56,7 @@ const handleLogout = () => {
 <template>
   <aside class="w-64 h-screen bg-[#0f172a] text-slate-300 flex flex-col flex-shrink-0 z-50">
     <!-- Header -->
-    <div class="p-6 border-b border-slate-800">
+    <div class="p-6 border-b border-slate-800 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold ring-4 ring-blue-900/40">
           W
@@ -65,6 +66,14 @@ const handleLogout = () => {
           <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Enterprise CMS</span>
         </div>
       </div>
+      
+      <!-- Collapse Button -->
+      <button 
+        @click="authStore.toggleSidebar"
+        class="text-slate-500 hover:text-white p-1.5 hover:bg-slate-800 rounded-lg transition-all group"
+      >
+        <PanelLeftClose size="18" class="group-hover:-translate-x-0.5 transition-transform" />
+      </button>
     </div>
 
     <!-- Navigation -->

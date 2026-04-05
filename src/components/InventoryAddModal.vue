@@ -102,7 +102,7 @@ const handleFileUpload = async (event, index) => {
       invoiceForm.items[index].images.push(fileKey)
     } catch (error) {
       console.error('S3 Upload Failed:', error)
-      alert(`Failed to upload ${file.name}. Please try again.`)
+      adminStore.showNotification('Media Error', `Failed to upload ${file.name}. Please try again.`, 'error')
     }
   }
 }
@@ -113,7 +113,7 @@ const removeImage = (item, imgIndex) => {
 
 const handleSave = () => {
   if (!invoiceForm.invoiceNumber || !invoiceForm.vendorName) {
-    alert('Please fill in Invoice Number and Vendor Name')
+    adminStore.showNotification('Entry Incomplete', 'Professional Requirement: Please fill in both Invoice Number and Vendor Name before finalizing.', 'warning')
     return
   }
   

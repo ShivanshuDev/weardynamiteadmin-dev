@@ -85,7 +85,7 @@ const handleSettlement = (vendorId, amount) => {
 }
 
 const exportAccountStatement = () => {
-  alert('Institutional Report Generation: The Statement of Account for ' + selectedVendor.value.name + ' is being compiled for export.')
+  adminStore.showNotification('Report Generation', 'Institutional Report Generation: The Statement of Account for ' + selectedVendor.value.name + ' is being compiled for export.', 'info')
 }
 
 const handleAddVendor = () => {

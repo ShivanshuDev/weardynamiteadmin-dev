@@ -111,9 +111,9 @@ const handleBulkUpdateStatus = async (status) => {
   try {
     const res = await adminStore.bulkUpdateInventoryStatus(updates)
     selectedItems.value = []
-    alert(`${updates.length} items marked as ${status} successfully!`);
+    adminStore.showNotification('Bulk Update Success', `${updates.length} items marked as ${status} successfully in the vault.`, 'success')
   } catch (error) {
-    alert(`Failed to update items: ${error.message}`);
+    adminStore.showNotification('Bulk Update Failed', `Operational Failure: ${error.message}`, 'error')
   }
 }
 

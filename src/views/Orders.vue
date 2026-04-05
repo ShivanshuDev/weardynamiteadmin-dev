@@ -173,8 +173,9 @@ const handleCreateManualOrder = () => {
   }
 }
 
-const openOrderDetail = (order) => {
-  selectedOrder.value = order
+const openOrderDetail = async (order) => {
+  const fullOrder = await adminStore.fetchOrderDetail(order.id)
+  selectedOrder.value = fullOrder || order
   showModal.value = true
 }
 

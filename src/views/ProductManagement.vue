@@ -5,7 +5,8 @@ import {
   Plus, Search, Filter, MoreVertical, Edit2, Trash2, Eye, 
   X, ChevronLeft, ChevronRight, Image as ImageIcon, 
   DollarSign, Layers, Settings, Globe, Tag, Info, List,
-  BarChart3, Download, FileText
+  BarChart3, Download, FileText, Camera, Upload, RefreshCw,
+  ShoppingCart, Check, Zap
 } from 'lucide-vue-next'
 import { QuillEditor } from '@vueup/vue-quill'
 import AnalyticsModal from '../components/AnalyticsModal.vue'
@@ -17,18 +18,52 @@ const adminStore = useAdminStore()
 // Search & Filter State
 const searchQuery = ref('')
 const filterCategory = ref('')
+const startDate = ref('')
+const endDate = ref('')
 const statusFilter = ref('All')
-const statusTabs = ['All', 'Draft', 'Active', 'Under Review', 'Inactive']
+const statusTabs = ['All', 'Draft', 'Active', 'Under Review', 'Inactive', 'Sold', 'Return']
+const bulkStatuses = [
+  { id: 'Active', label: 'Activate', icon: Check, color: 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-900/20' },
+  { id: 'Draft', label: 'Move to Draft', icon: RefreshCw, color: 'bg-slate-600 hover:bg-slate-700 shadow-slate-900/20' },
+  { id: 'Under Review', label: 'Review', icon: Zap, color: 'bg-orange-600 hover:bg-orange-700 shadow-orange-900/20' },
+  { id: 'Sold', label: 'Mark as Sold', icon: ShoppingCart, color: 'bg-blue-600 hover:bg-blue-700 shadow-blue-900/20' },
+  { id: 'Return', label: 'Process Return', icon: RefreshCw, color: 'bg-purple-600 hover:bg-purple-700 shadow-purple-900/20' },
+  { id: 'Inactive', label: 'Deactivate', icon: X, color: 'bg-red-600 hover:bg-red-700 shadow-red-900/20' }
+]
+
+// Utility Formatting
+const formatDate = (ts) => {
+  if (!ts) return '-'
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return '-'
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric'
+  })
+}
 
 // Computed Filtering
 const filteredProducts = computed(() => {
   return adminStore.products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
-                          p.id.toString().includes(searchQuery.value) ||
-                          (p.sku && p.sku.toLowerCase().includes(searchQuery.value.toLowerCase()))
+    const s = searchQuery.value.toLowerCase()
+    // "Filter by all row" (Global search across columns)
+    const matchesSearch = (p.name || '').toLowerCase().includes(s) || 
+                          (p.id || '').toString().includes(s) ||
+                          (p.sku && p.sku.toLowerCase().includes(s)) ||
+                          (p.category && p.category.toLowerCase().includes(s)) ||
+                          (p.status && p.status.toLowerCase().includes(s)) ||
+                          (p.gender && p.gender.toLowerCase().includes(s)) ||
+                          (p.brand && p.brand.toLowerCase().includes(s))
+
     const matchesCategory = filterCategory.value === '' || p.category === filterCategory.value
     const matchesStatus = statusFilter.value === 'All' || p.status === statusFilter.value
-    return matchesSearch && matchesCategory && matchesStatus
+    
+    // Date Range Filtering
+    const matchesStartDate = !startDate.value || p.created_at >= new Date(startDate.value).getTime()
+    const matchesEndDate = !endDate.value || p.created_at <= new Date(endDate.value).setHours(23, 59, 59, 999)
+
+    return matchesSearch && matchesCategory && matchesStatus && matchesStartDate && matchesEndDate
   })
 })
 
@@ -49,6 +84,62 @@ const nextPage = () => {
 
 const prevPage = () => {
   if (currentPage.value > 1) currentPage.value--
+}
+
+// selection state
+const selectedProductIds = ref([])
+const showBulkConfirm = ref(false)
+const bulkStatusTarget = ref('')
+
+const isAllSelected = computed({
+  get: () => paginatedProducts.value.length > 0 && paginatedProducts.value.every(p => selectedProductIds.value.includes(p.id)),
+  set: (val) => {
+    if (val) {
+      const idsToAdd = paginatedProducts.value.map(p => p.id)
+      const newSelected = new Set([...selectedProductIds.value, ...idsToAdd])
+      if (newSelected.size > 50) {
+        adminStore.showNotification('Selection Limit', 'For processing integrity, maximum 50 items can be selected for bulk update.', 'warning')
+        selectedProductIds.value = Array.from(newSelected).slice(0, 50)
+      } else {
+        selectedProductIds.value = Array.from(newSelected)
+      }
+    } else {
+      const idsToRemove = paginatedProducts.value.map(p => p.id)
+      selectedProductIds.value = selectedProductIds.value.filter(id => !idsToRemove.includes(id))
+    }
+  }
+})
+
+const toggleSelectAll = (event) => {
+  isAllSelected.value = event.target.checked
+}
+
+const toggleSelectProduct = (id) => {
+  const index = selectedProductIds.value.indexOf(id)
+  if (index === -1) {
+    if (selectedProductIds.value.length >= 50) {
+      adminStore.showNotification('Selection Limit', 'Institutional limit reached: Maximum 50 items can be selected for bulk update.', 'warning')
+      return
+    }
+    selectedProductIds.value.push(id)
+  } else {
+    selectedProductIds.value.splice(index, 1)
+  }
+}
+
+const handleBulkStatusUpdate = async (status) => {
+  if (!selectedProductIds.value.length) return
+  
+  try {
+    await adminStore.bulkUpdateProductStatus(selectedProductIds.value, status)
+    selectedProductIds.value = []
+    showBulkConfirm.value = false
+    // Refresh items to show new status
+    await adminStore.fetchProducts() 
+  } catch (err) {
+    console.error('Bulk update failed:', err)
+    adminStore.showNotification('Operational Failure', 'Failed to update some items. Please check the logs.', 'error')
+  }
 }
 
 // Modal State
@@ -99,8 +190,15 @@ const newProduct = ref({
   seoTitle: '',
   seoDescription: '',
   urlHandle: '',
-  specs: []
+  specs: [],
+  image: '',
+  isReturnable: true,
+  returnDays: 7,
+  codAvailable: false,
+  codCouponApplicable: false
 })
+
+
 
 // Delete Confirmation State
 const showDeleteConfirm = ref(false)
@@ -128,35 +226,108 @@ const executeDelete = async () => {
       }
     } catch (error) {
       console.error('[Delete Error] Failed to purge product:', error)
-      alert('Institutional delete failed. Please verify server connectivity.')
+      adminStore.showNotification('Purge Failed', 'Institutional delete failed. Please verify server connectivity.', 'error')
     } finally {
       isDeleting.value = false
     }
   }
 }
 
+const activePreviewImage = ref('')
+
+const validateProduct = () => {
+  const p = newProduct.value
+  const errors = []
+
+  if (!p.name?.trim()) errors.push('Product Name is required.')
+  if (!p.brand?.trim()) errors.push('Brand is required.')
+  if (!p.category?.trim()) errors.push('Category is required.')
+  if (!p.subCategory?.trim()) errors.push('Sub-Category is required.')
+  if (!p.description?.trim()) errors.push('Description is required.')
+  if (!p.sku?.trim()) errors.push('SKU is required.')
+  if (!p.barcode?.trim()) errors.push('Barcode is required.')
+  
+  if (Number(p.mrp) <= 0) errors.push('MRP must be greater than 0.')
+  if (Number(p.salePrice) <= 0) errors.push('Sale Price must be greater than 0.')
+  
+  // Clean empty images
+  const validImages = (p.images || []).filter(img => img && img.trim() !== '')
+  if (validImages.length < 3) {
+    errors.push('Institutional Standard: Minimum 3 product images are required.')
+  }
+
+  // Variant validation
+  const hasValidVariant = p.variants?.some(v => v.color && v.sizes?.some(s => s.size && Number(s.stock) >= 0))
+  if (!hasValidVariant) {
+    errors.push('At least one valid color variant with stock is required.')
+  }
+
+  return errors
+}
+
 const openAddModal = () => {
   modalMode.value = 'add'
-  // Reset newProduct
+  activeTab.value = 'general'
+  activePreviewImage.value = ''
+  // Reset newProduct with explicit boolean defaults
   newProduct.value = {
     name: '', brand: 'Wear Dynamite', status: 'Draft', category: '', subCategory: '', gender: 'Unisex', description: '',
     mrp: 0, salePrice: 0, purchasePrice: 0, taxPercent: 18, isTaxable: true, discountPercentage: 0, promotionType: 'None', discountCoupon: '',
     sku: '', barcode: '', stock: 0, lowStockAlert: 10,
     primaryColor: '', primarySize: '', fit: '', neckType: '', occasion: '', images: [''], variants: [{ color: '', sizes: [{ size: '', stock: 0 }] }],
-    keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: []
+    keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: [], image: '',
+    isReturnable: true, returnDays: 7, codAvailable: false, codCouponApplicable: false
   }
   showAddModal.value = true
 }
 
 const openEditModal = (product) => {
   modalMode.value = 'edit'
-  newProduct.value = JSON.parse(JSON.stringify(product))
+  activeTab.value = 'general'
+  const p = JSON.parse(JSON.stringify(product))
+  
+  // Hardening media: Merge singular 'image' into 'images' array if missing
+  if (!p.images || !p.images.length || (p.images.length === 1 && !p.images[0])) {
+    p.images = p.image ? [p.image] : ['']
+  } else if (p.image && !p.images.includes(p.image)) {
+    p.images.unshift(p.image)
+  }
+  
+  // Clean up duplicates and empty strings
+  p.images = Array.from(new Set(p.images.filter(img => img && img.trim() !== '')))
+  if (p.images.length === 0) p.images = ['']
+
+  if (!p.variants || !p.variants.length) p.variants = [{ color: '', sizes: [{ size: '', stock: 0 }] }]
+  if (!p.specs) p.specs = []
+  if (!p.keywords) p.keywords = []
+  
+  newProduct.value = p
+  activePreviewImage.value = p.images[0] || ''
   showAddModal.value = true
 }
 
 const openViewModal = (product) => {
   modalMode.value = 'view'
-  newProduct.value = JSON.parse(JSON.stringify(product))
+  activeTab.value = 'general'
+  const p = JSON.parse(JSON.stringify(product))
+
+  // Hardening media: Merge singular 'image' into 'images' array if missing
+  if (!p.images || !p.images.length || (p.images.length === 1 && !p.images[0])) {
+    p.images = p.image ? [p.image] : ['']
+  } else if (p.image && !p.images.includes(p.image)) {
+    p.images.unshift(p.image)
+  }
+
+  // Clean up duplicates
+  p.images = Array.from(new Set(p.images.filter(img => img && img.trim() !== '')))
+  if (p.images.length === 0) p.images = ['']
+
+  if (!p.variants || !p.variants.length) p.variants = [{ color: '', sizes: [{ size: '', stock: 0 }] }]
+  if (!p.specs) p.specs = []
+  if (!p.keywords) p.keywords = []
+
+  newProduct.value = p
+  activePreviewImage.value = p.images[0] || ''
   showAddModal.value = true
 }
 
@@ -184,33 +355,84 @@ const removeImageField = (index) => {
   newProduct.value.images.splice(index, 1)
 }
 
-const saveProduct = () => {
+// Media Upload Logic
+const isUploadingMedia = ref(false)
+const handleProductImageUpload = async (event, index = null) => {
+  const file = event.target.files ? event.target.files[0] : null
+  if (!file) return
+  
+  isUploadingMedia.value = true
+  await uploadFileToStore(file, index)
+  event.target.value = ''
+}
+
+const uploadFileToStore = async (file, index = null) => {
+  isUploadingMedia.value = true
+  try {
+    // 1. Get Presigned URL
+    const { uploadUrl, fileKey } = await adminStore.getPresignedUrl(file.name, file.type, 'products')
+    
+    // 2. Upload to S3
+    await adminStore.uploadToS3(uploadUrl, file)
+
+    // 3. Update state
+    if (index !== null && index < newProduct.value.images.length) {
+      newProduct.value.images[index] = fileKey
+    } else {
+      // Replace placeholder if present
+      if (newProduct.value.images.length === 1 && !newProduct.value.images[0]) {
+        newProduct.value.images[0] = fileKey
+      } else {
+        newProduct.value.images.push(fileKey)
+      }
+    }
+  } catch (error) {
+    console.error('Product Media Upload Failed:', error)
+    adminStore.showNotification('Media Error', 'Failed to upload asset to the vault. Please check your connectivity and try again.', 'error')
+  } finally {
+    isUploadingMedia.value = false
+  }
+}
+
+const saveProduct = async () => {
+  const errors = validateProduct()
+  if (errors.length > 0) {
+    adminStore.showNotification('Validation Required', 'Please correct following before committing:\n\n• ' + errors.join('\n• '), 'warning')
+    return
+  }
+
   const totalVariantStock = newProduct.value.variants.reduce((acc, colorGroup) => {
     return acc + colorGroup.sizes.reduce((sAcc, s) => sAcc + (Number(s.stock) || 0), 0)
   }, 0)
 
-  if (modalMode.value === 'add') {
-    const productToSave = {
-      ...newProduct.value,
-      id: Date.now(),
-      salePrice: Number(newProduct.value.salePrice) || 0,
-      purchasePrice: Number(newProduct.value.purchasePrice) || 0,
-      stock: totalVariantStock || newProduct.value.stock,
-      image: newProduct.value.images[0] || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=200'
+  try {
+    if (modalMode.value === 'add') {
+      const productToSave = {
+        ...newProduct.value,
+        id: Date.now(),
+        salePrice: Number(newProduct.value.salePrice) || 0,
+        purchasePrice: Number(newProduct.value.purchasePrice) || 0,
+        stock: totalVariantStock,
+        image: newProduct.value.images.filter(i => i)[0] || ''
+      }
+      await adminStore.addProduct(productToSave)
+    } else if (modalMode.value === 'edit') {
+      const updatedProduct = {
+        ...newProduct.value,
+        salePrice: Number(newProduct.value.salePrice) || 0,
+        purchasePrice: Number(newProduct.value.purchasePrice) || 0,
+        stock: totalVariantStock
+      }
+      await adminStore.updateProduct(updatedProduct)
     }
-    adminStore.addProduct(productToSave)
-  } else if (modalMode.value === 'edit') {
-    const updatedProduct = {
-      ...newProduct.value,
-      salePrice: Number(newProduct.value.salePrice) || 0,
-      purchasePrice: Number(newProduct.value.purchasePrice) || 0,
-      stock: totalVariantStock || newProduct.value.stock
-    }
-    adminStore.updateProduct(updatedProduct)
+    
+    showAddModal.value = false
+    activeTab.value = 'general'
+    adminStore.showNotification('Success', 'Product vault updated successfully.', 'success')
+  } catch (error) {
+    console.error('Save failed:', error)
+    adminStore.showNotification('Vault Update Failed', error.message || 'Server connection error', 'error')
   }
-  
-  showAddModal.value = false
-  activeTab.value = 'general'
 }
 
 // Export State
@@ -297,7 +519,7 @@ const exportProductsToPDF = async () => {
     doc.save(`Product_Vault_Manifest_${formatDateNumeric(now)}.pdf`)
   } catch (error) {
     console.error('PDF Export Error:', error)
-    alert('Catalog export failed. Please try again.')
+    adminStore.showNotification('Export Failed', 'Catalog manifest generation failed. Technical logs have been recorded.', 'error')
   } finally {
     isExporting.value = false
   }
@@ -402,7 +624,7 @@ const exportProductsToExcel = () => {
     link.click()
   } catch (error) {
     console.error('Excel Export Error:', error)
-    alert('Excel export failed.')
+    adminStore.showNotification('Export Failed', 'Excel generation was interrupted by a system error.', 'error')
   } finally {
     isExporting.value = false
   }
@@ -423,6 +645,7 @@ onMounted(() => {
         <p class="text-slate-500 font-bold text-sm uppercase tracking-widest mt-1">Manage Catalog & Inventory</p>
       </div>
       <div class="flex items-center gap-3">
+
         <button 
           @click="exportProductsToPDF"
           :disabled="isExporting"
@@ -489,6 +712,33 @@ onMounted(() => {
           <option>Footwear</option>
         </select>
       </div>
+      
+      <!-- Date Range Filter -->
+      <div class="flex items-center gap-3 px-6 py-4 bg-white border border-slate-100 rounded-2xl shadow-sm group focus-within:border-blue-500 transition-all">
+        <div class="flex flex-col">
+          <span class="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em] leading-none mb-1">Added Range</span>
+          <div class="flex items-center gap-2">
+            <input 
+              v-model="startDate" 
+              type="date" 
+              class="bg-transparent outline-none text-[10px] font-bold text-slate-600 cursor-pointer focus:text-blue-600 transition-colors" 
+            />
+            <span class="text-slate-200 text-xs">-</span>
+            <input 
+              v-model="endDate" 
+              type="date" 
+              class="bg-transparent outline-none text-[10px] font-bold text-slate-600 cursor-pointer focus:text-blue-600 transition-colors" 
+            />
+          </div>
+        </div>
+        <button 
+          v-if="startDate || endDate" 
+          @click="startDate = ''; endDate = ''"
+          class="text-slate-300 hover:text-red-500 transition-colors"
+        >
+          <X size="14" />
+        </button>
+      </div>
     </div>
 
      <!-- Table -->
@@ -496,11 +746,21 @@ onMounted(() => {
        <table class="w-full text-left min-w-[1400px]">
          <thead>
            <tr class="bg-slate-50/50">
+             <th class="px-6 py-4 w-12">
+               <div class="flex items-center justify-center">
+                 <input 
+                   type="checkbox" 
+                   :checked="isAllSelected"
+                   @change="toggleSelectAll"
+                   class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                 />
+               </div>
+             </th>
              <th class="px-6 py-4 text-[10px] font-black uppercase text-slate-500 w-16 text-center">No.</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500">Identity</th>
-             <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500">Product Name</th>
+
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500">Category</th>
-             <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Gen</th>
+             <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Gender</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Status</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">MRP</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Sale</th>
@@ -508,25 +768,39 @@ onMounted(() => {
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Disc %</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500">Promo / Coupon</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Stock</th>
+             <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Features</th>
+             <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Added Date</th>
              <th class="px-6 py-4 text-[10px] font-black uppercase text-slate-500 text-right">Actions</th>
            </tr>
          </thead>
         <tbody class="divide-y divide-slate-50 flex-1">
-          <tr v-for="(p, idx) in paginatedProducts" :key="p.id" class="hover:bg-slate-50/30 transition-colors group h-14 overflow-hidden border-b border-slate-50">
-            <td class="px-6 text-center font-black text-[10px] text-slate-400 font-mono">
-              {{ (currentPage - 1) * itemsPerPage + idx + 1 }}
-            </td>
-            <td class="px-4">
+           <tr v-for="(p, idx) in paginatedProducts" :key="p.id" class="hover:bg-slate-50/50 transition-colors group h-14 overflow-hidden border-b border-slate-50 cursor-pointer" @click="openViewModal(p)">
+             <td class="px-6 w-12" @click.stop>
+               <div class="flex items-center justify-center">
+                 <input 
+                   type="checkbox" 
+                   :checked="selectedProductIds.includes(p.id)"
+                   @change="toggleSelectProduct(p.id)"
+                   class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                 />
+               </div>
+             </td>
+             <td class="px-6 text-center font-black text-[10px] text-slate-400 font-mono">
+               {{ (currentPage - 1) * itemsPerPage + idx + 1 }}
+             </td>
+             <td class="px-4">
               <div class="flex items-center gap-3">
-                 <img :src="p.image" class="w-8 h-8 rounded-lg object-cover bg-slate-100 shadow-sm" />
-                 <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest">{{ p.sku || p.id }}</span>
+                 <img :src="adminStore.resolveImageUrl(p.image)" class="w-9 h-9 rounded-lg object-cover bg-slate-100 shadow-sm border border-slate-100" />
+                 <div class="flex flex-col gap-0.5">
+                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter font-mono leading-none">{{ p.sku || p.id }}</span>
+                    <p class="text-[11px] font-black text-slate-900 truncate max-w-[150px] italic leading-tight">{{ p.name }}</p>
+                 </div>
               </div>
             </td>
             <td class="px-4">
-               <p class="text-[11px] font-black text-slate-900 truncate max-w-[150px] italic">{{ p.name }}</p>
-            </td>
-            <td class="px-4">
-               <span class="text-[10px] font-black text-slate-600 uppercase">{{ p.category }}</span>
+               <div class="flex flex-col">
+                  <span class="text-[10px] font-black text-slate-600 uppercase">{{ p.category }}</span>
+               </div>
             </td>
             <td class="px-4 text-center">
                <span class="text-[10px] font-black text-blue-500">{{ (p.gender || 'U').charAt(0).toUpperCase() }}</span>
@@ -535,10 +809,12 @@ onMounted(() => {
                <span 
                  class="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border"
                  :class="{
-                   'bg-slate-50 text-slate-400 border-slate-100': !p.status || p.status === 'Draft',
-                   'bg-emerald-50 text-emerald-600 border-emerald-100': p.status === 'Active',
-                   'bg-orange-50 text-orange-600 border-orange-100': p.status === 'Under Review',
-                   'bg-red-50 text-red-600 border-red-100': p.status === 'Inactive'
+                    'bg-slate-50 text-slate-400 border-slate-100': !p.status || ['Draft', 'draft'].includes(p.status),
+                    'bg-emerald-50 text-emerald-600 border-emerald-100': ['Active', 'active'].includes(p.status),
+                    'bg-orange-50 text-orange-600 border-orange-100': ['Under Review', 'under_review'].includes(p.status),
+                    'bg-blue-50 text-blue-600 border-blue-100': ['Sold', 'sold'].includes(p.status),
+                    'bg-purple-50 text-purple-600 border-purple-100': ['Return', 'return'].includes(p.status),
+                    'bg-red-50 text-red-600 border-red-100': ['Inactive', 'inactive'].includes(p.status)
                  }"
                >
                  {{ p.status || 'Draft' }}
@@ -562,7 +838,25 @@ onMounted(() => {
                </div>
             </td>
             <td class="px-4 text-center">
-               <span class="text-[11px] font-black text-slate-800" :class="p.stock < 10 ? 'text-red-500' : ''">{{ p.stock }}</span>
+               <div class="inline-flex flex-col items-center">
+                  <span class="text-[11px] font-black" :class="p.stock <= (p.lowStockAlert || 10) ? 'text-red-500' : 'text-slate-800'">{{ p.stock }}</span>
+                  <div v-if="p.stock <= (p.lowStockAlert || 10)" class="w-1 h-1 rounded-full bg-red-500 mt-0.5 animate-pulse"></div>
+               </div>
+            </td>
+            <td class="px-4 text-center">
+               <div class="flex items-center justify-center gap-2">
+                  <div v-if="p.codAvailable" class="p-1.5 bg-emerald-50 text-emerald-600 rounded-md shadow-sm border border-emerald-100/50" title="COD Available">
+                    <DollarSign size="12" />
+                  </div>
+                  <div v-if="p.isReturnable" class="p-1.5 bg-blue-50 text-blue-600 rounded-md shadow-sm border border-blue-100/50 flex items-center gap-1.5" :title="`Returnable (${p.returnDays || 7} days)`">
+                    <RefreshCw size="12" />
+                    <span class="text-[9px] font-black">{{ p.returnDays || 7 }}d</span>
+                  </div>
+                  <div v-if="!p.codAvailable && !p.isReturnable" class="text-slate-200 text-[10px]">-</div>
+               </div>
+            </td>
+            <td class="px-4 text-center">
+               <span class="text-[10px] font-black text-slate-400 font-mono tracking-tighter">{{ formatDate(p.created_at) }}</span>
             </td>
             <td class="px-6 text-right">
               <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
@@ -604,6 +898,49 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- Floating Bulk Actions Manifest -->
+    <Transition
+      enter-active-class="transform transition ease-out duration-500"
+      enter-from-class="translate-y-full opacity-0"
+      enter-to-class="translate-y-0 opacity-100"
+      leave-active-class="transform transition ease-in duration-300"
+      leave-from-class="translate-y-0 opacity-100"
+      leave-to-class="translate-y-full opacity-0"
+    >
+      <div v-if="selectedProductIds.length > 0" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-[90] w-full max-w-4xl px-4">
+        <div class="bg-black/90 backdrop-blur-xl border border-white/10 rounded-[4px] shadow-2xl p-6 flex items-center justify-between gap-8">
+            <div class="flex items-center gap-6">
+                <div class="flex flex-col">
+                  <span class="text-[8px] font-black uppercase text-slate-500 tracking-[0.3em] leading-none mb-1.5">Administrative Selection</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-white text-2xl font-black italic">{{ selectedProductIds.length }}</span>
+                    <span class="text-white/40 text-[10px] font-black uppercase tracking-widest pt-1">Units Selected</span>
+                  </div>
+                </div>
+                <div class="h-10 w-[1px] bg-white/10 mx-2"></div>
+                <button @click="selectedProductIds = []" class="text-white/60 hover:text-white text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-2">
+                    <X size="14"/> Deselect All
+                </button>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 justify-end">
+                    <button 
+                      v-for="status in bulkStatuses" 
+                      :key="status.id"
+                      @click="handleBulkStatusUpdate(status.id)"
+                      class="px-4 py-2.5 rounded-sm text-[9px] font-black uppercase tracking-widest flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-95"
+                      :class="[status.color, 'text-white']"
+                    >
+                      <component :is="status.icon" size="14"/>
+                      {{ status.label }}
+                    </button>
+                </div>
+            </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Advanced Add Product Modal -->
     <div v-if="showAddModal" class="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10 lg:p-20 transition-all">
        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" @click="showAddModal = false"></div>
@@ -631,8 +968,8 @@ onMounted(() => {
              </button>
           </div>
 
-          <!-- Modal Body with Tabs -->
-          <div class="flex-1 flex overflow-hidden">
+          <!-- Modal Body with Bifurcated Layout -->
+          <div v-if="modalMode === 'add' || modalMode === 'edit'" class="flex-1 flex overflow-hidden">
              <!-- Tabs Sidebar -->
              <div class="w-64 border-r border-slate-100 bg-slate-50/50 p-6 space-y-2 overflow-y-auto hidden md:block">
                 <button 
@@ -662,17 +999,19 @@ onMounted(() => {
                    <div class="grid grid-cols-2 gap-8">
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Product Title</label>
-                         <input v-model="newProduct.name" :disabled="modalMode === 'view'" type="text" placeholder="e.g. Essential Heavyweight Hoodie" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                         <input v-model="newProduct.name" type="text" placeholder="e.g. Essential Heavyweight Hoodie" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
                       </div>
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Brand Identity</label>
-                         <input v-model="newProduct.brand" :disabled="modalMode === 'view'" type="text" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                         <input v-model="newProduct.brand" type="text" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
                       </div>
                    </div>
+
+
                    <div class="grid grid-cols-3 gap-8">
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Category Selection</label>
-                         <select v-model="newProduct.category" :disabled="modalMode === 'view'" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all disabled:opacity-70">
+                         <select v-model="newProduct.category" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
                             <option value="">Select Category</option>
                             <option>Apparel</option>
                             <option>Accessories</option>
@@ -681,11 +1020,11 @@ onMounted(() => {
                       </div>
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Sub-Category</label>
-                         <input v-model="newProduct.subCategory" :disabled="modalMode === 'view'" type="text" placeholder="e.g. T-Shirts" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                         <input v-model="newProduct.subCategory" type="text" placeholder="e.g. T-Shirts" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
                       </div>
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Gender Preference</label>
-                         <select v-model="newProduct.gender" :disabled="modalMode === 'view'" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all disabled:opacity-70">
+                         <select v-model="newProduct.gender" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
                             <option>Unisex</option>
                             <option>Men</option>
                             <option>Women</option>
@@ -772,14 +1111,14 @@ onMounted(() => {
                          <label class="text-[10px] font-black uppercase text-slate-400">MRP (₹)</label>
                          <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 font-bold">₹</span>
-                            <input v-model="newProduct.mrp" :disabled="modalMode === 'view'" type="number" class="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                            <input v-model="newProduct.mrp" type="number" class="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
                          </div>
                       </div>
                       <div class="space-y-2 text-blue-600">
                          <label class="text-[10px] font-black uppercase text-blue-400">Sale Price (₹)</label>
                          <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 font-bold">₹</span>
-                            <input v-model="newProduct.salePrice" :disabled="modalMode === 'view'" type="number" class="w-full pl-10 pr-4 py-4 bg-blue-50/50 rounded-xl border border-blue-100 focus:border-blue-600 outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                            <input v-model="newProduct.salePrice" type="number" class="w-full pl-10 pr-4 py-4 bg-blue-50/50 rounded-xl border border-blue-100 focus:border-blue-600 outline-none font-bold text-sm transition-all shadow-sm" />
                          </div>
                       </div>
                     </div>
@@ -824,6 +1163,92 @@ onMounted(() => {
                          <p class="text-xs font-bold text-emerald-600 mt-1">Calculated based on sale price & discount</p>
                       </div>
                       <h4 class="text-2xl font-black text-emerald-700 leading-none">₹{{ (newProduct.salePrice * (1 - (newProduct.discountPercentage || 0) / 100)).toFixed(2) }}</h4>
+                    </div>
+
+                    <!-- Transaction Features Row -->
+                    <div class="pt-8 border-t border-slate-100 space-y-6">
+                        <h3 class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Transaction Features</h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                           <!-- COD Toggle -->
+                           <button 
+                              @click="newProduct.codAvailable = !newProduct.codAvailable"
+                              class="flex flex-col items-start p-4 rounded-2xl border transition-all text-left group"
+                              :class="newProduct.codAvailable ? 'bg-emerald-50 border-emerald-200 ring-2 ring-emerald-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
+                           >
+                              <div class="flex items-center justify-between w-full mb-2">
+                                 <div class="p-2 rounded-lg" :class="newProduct.codAvailable ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'">
+                                    <DollarSign size="16" />
+                                 </div>
+                                 <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.codAvailable ? 'bg-emerald-500' : 'bg-slate-300'">
+                                    <div class="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300" :class="newProduct.codAvailable ? 'left-4.5' : 'left-0.5'"></div>
+                                 </div>
+                              </div>
+                              <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.codAvailable ? 'text-emerald-900' : 'text-slate-700'">Enable COD</span>
+                              <p class="text-[9px] font-bold mt-1" :class="newProduct.codAvailable ? 'text-emerald-600' : 'text-slate-400'">Allow Cash on Delivery</p>
+                           </button>
+
+                           <!-- Returns Toggle & Days -->
+                           <div class="space-y-4">
+                              <button 
+                                 @click="newProduct.isReturnable = !newProduct.isReturnable"
+                                 class="w-full flex flex-col items-start p-4 rounded-2xl border transition-all text-left group"
+                                 :class="newProduct.isReturnable ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
+                              >
+                                 <div class="flex items-center justify-between w-full mb-2">
+                                    <div class="p-2 rounded-lg" :class="newProduct.isReturnable ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'">
+                                       <RefreshCw size="16" />
+                                    </div>
+                                    <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.isReturnable ? 'bg-blue-500' : 'bg-slate-300'">
+                                       <div class="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300" :class="newProduct.isReturnable ? 'left-4.5' : 'left-0.5'"></div>
+                                    </div>
+                                 </div>
+                                 <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.isReturnable ? 'text-blue-900' : 'text-slate-700'">Allow Returns</span>
+                                 <p class="text-[9px] font-bold mt-1" :class="newProduct.isReturnable ? 'text-blue-600' : 'text-slate-400'">Orders can be returned</p>
+                              </button>
+
+                              <!-- Return Days Input (Visible only if returnable) -->
+                              <Transition
+                                 enter-active-class="transform transition ease-out duration-300"
+                                 enter-from-class="-translate-y-2 opacity-0"
+                                 enter-to-class="translate-y-0 opacity-100"
+                              >
+                                 <div v-if="newProduct.isReturnable" class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                                       Return window (Days)
+                                    </label>
+                                    <div class="relative">
+                                       <input 
+                                          v-model="newProduct.returnDays" 
+                                          type="number" 
+                                          class="w-full p-3 bg-slate-50 rounded-xl border border-transparent focus:border-blue-500 outline-none font-black text-sm transition-all"
+                                          placeholder="7"
+                                       />
+                                       <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">Days</span>
+                                    </div>
+                                 </div>
+                              </Transition>
+                           </div>
+
+                           <!-- COD Coupon Toggle -->
+                           <button 
+                              v-if="newProduct.codAvailable"
+                              @click="newProduct.codCouponApplicable = !newProduct.codCouponApplicable"
+                              class="flex flex-col items-start p-4 rounded-2xl border transition-all text-left group animate-in slide-in-from-top-2 duration-300"
+                              :class="newProduct.codCouponApplicable ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
+                           >
+                              <div class="flex items-center justify-between w-full mb-2">
+                                 <div class="p-2 rounded-lg" :class="newProduct.codCouponApplicable ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'">
+                                    <Tag size="16" />
+                                 </div>
+                                 <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.codCouponApplicable ? 'bg-purple-500' : 'bg-slate-300'">
+                                    <div class="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300" :class="newProduct.codCouponApplicable ? 'left-4.5' : 'left-0.5'"></div>
+                                 </div>
+                              </div>
+                              <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.codCouponApplicable ? 'text-purple-900' : 'text-slate-700'">COD Coupons</span>
+                              <p class="text-[9px] font-bold mt-1" :class="newProduct.codCouponApplicable ? 'text-purple-600' : 'text-slate-400'">Allow coupons for COD</p>
+                           </button>
+                        </div>
                     </div>
                 </div>
 
@@ -933,15 +1358,53 @@ onMounted(() => {
 
                 <!-- Media Gallery Tab -->
                 <div v-if="activeTab === 'media'" class="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                   <div class="flex items-center justify-between mb-2">
+                       <div>
+                           <h3 class="text-sm font-black uppercase tracking-widest text-slate-700">Media Vault</h3>
+                           <p class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">Photography & Promotional Videos</p>
+                       </div>
+                       <div class="flex items-center gap-3">
+                           <button 
+                               @click="$refs.bulkFileRef.click()" 
+                               :disabled="modalMode === 'view' || isUploadingMedia"
+                               class="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 disabled:opacity-50"
+                           >
+                               <Upload v-if="!isUploadingMedia" size="14"/>
+                               <RefreshCw v-else size="14" class="animate-spin" />
+                               {{ isUploadingMedia ? 'Uploading...' : 'Bulk Upload Assets' }}
+                           </button>
+                           <input type="file" ref="bulkFileRef" class="hidden" multiple accept="image/*,video/*" @change="handleProductImageUpload" />
+                       </div>
+                   </div>
+
                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div v-for="(img, idx) in newProduct.images" :key="idx" class="aspect-square bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative group overflow-hidden">
-                         <img v-if="img" :src="img" class="w-full h-full object-cover" />
+                      <div v-for="(img, idx) in newProduct.images" :key="idx" class="aspect-square bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative group overflow-hidden transition-all hover:border-blue-400">
+                         <!-- Media Rendering -->
+                         <template v-if="img">
+                             <video v-if="adminStore.isVideo(img)" :src="adminStore.resolveImageUrl(img)" muted playsinline loop class="w-full h-full object-cover" onmouseenter="this.play()" onmouseleave="this.pause()"></video>
+                             <img v-else :src="adminStore.resolveImageUrl(img)" class="w-full h-full object-cover" />
+                         </template>
                          <div v-else class="text-center p-4">
                             <ImageIcon size="32" class="text-slate-300 mx-auto" stroke-width="1.5" />
-                            <p class="text-[9px] font-black uppercase text-slate-400 mt-2">Upload or Paste URL</p>
+                            <p class="text-[9px] font-black uppercase text-slate-400 mt-2">No Asset Linked</p>
                           </div>
-                          <input v-model="newProduct.images[idx]" :disabled="modalMode === 'view'" placeholder="Paste Image URL..." class="absolute bottom-3 left-3 right-3 p-2 bg-white/95 backdrop-blur shadow-xl rounded-lg text-[9px] outline-none border border-slate-100 font-bold opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0" />
-                         <button v-if="newProduct.images.length > 1" @click="removeImageField(idx)" :disabled="modalMode === 'view'" class="absolute top-3 right-3 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed">
+
+                          <!-- Overlays -->
+                          <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+                              <button 
+                                  @click="$refs[`fileInput_${idx}`][0].click()" 
+                                  :disabled="modalMode === 'view'"
+                                  class="p-3 bg-white text-black rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-xl"
+                              >
+                                  <Camera size="20" />
+                              </button>
+                              <input type="file" :ref="`fileInput_${idx}`" class="hidden" accept="image/*,video/*" @change="(e) => handleProductImageUpload(e, idx)" />
+                              <input v-model="newProduct.images[idx]" :disabled="modalMode === 'view'" placeholder="Or Paste URL..." class="mx-4 p-2 bg-white/95 backdrop-blur shadow-xl rounded-lg text-[9px] outline-none border border-slate-100 font-bold w-4/5 text-center" />
+                          </div>
+
+                         <!-- Badge / Delete -->
+                         <div v-if="idx === 0 && img" class="absolute top-3 left-3 px-2 py-1 bg-blue-600 text-white text-[8px] font-black uppercase tracking-widest rounded shadow-lg">Primary</div>
+                         <button v-if="newProduct.images.length > 1" @click="removeImageField(idx)" :disabled="modalMode === 'view'" class="absolute top-3 right-3 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0">
                             <X size="14" />
                          </button>
                       </div>
@@ -1015,6 +1478,176 @@ onMounted(() => {
              </div>
           </div>
 
+          <!-- Immersive eCommerce Preview Layout (View Mode) -->
+          <div v-else class="flex-1 overflow-hidden bg-white flex flex-col lg:flex-row">
+             <!-- Media Section (Left) -->
+             <div class="lg:w-3/5 bg-slate-50 flex flex-col p-6 border-r border-slate-100 overflow-y-auto custom-scrollbar">
+                <div class="relative aspect-square rounded-[3rem] overflow-hidden bg-white shadow-2xl shadow-slate-200/50 flex items-center justify-center group border border-slate-100 transition-all duration-500 hover:shadow-blue-900/10">
+                   <template v-if="activePreviewImage">
+                      <video 
+                        v-if="adminStore.isVideo(activePreviewImage)" 
+                        :src="adminStore.resolveImageUrl(activePreviewImage)" 
+                        controls 
+                        autoplay 
+                        muted 
+                        loop 
+                        class="w-full h-full object-cover"
+                      ></video>
+                      <img 
+                        v-else 
+                        :src="adminStore.resolveImageUrl(activePreviewImage)" 
+                        class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                      />
+                   </template>
+                   <div v-else class="flex flex-col items-center gap-4 text-slate-300">
+                      <ImageIcon size="80" stroke-width="1" class="opacity-20" />
+                      <p class="text-[10px] font-black uppercase tracking-[0.3em] italic opacity-40">Zero Assets Found</p>
+                   </div>
+                   
+                   <!-- Asset Indicator -->
+                   <div v-if="newProduct.images && newProduct.images.length > 1" class="absolute bottom-10 right-10 bg-black/80 backdrop-blur-md px-4 py-2 rounded-full text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                      <ImageIcon size="12" />
+                      {{ newProduct.images.indexOf(activePreviewImage) + 1 }} / {{ newProduct.images.length }}
+                   </div>
+                </div>
+
+                <!-- Thumbnails Carousel -->
+                <div v-if="newProduct.images && newProduct.images.length > 1" class="flex flex-wrap items-center gap-4 mt-8 px-2">
+                   <button 
+                     v-for="(img, idx) in newProduct.images" 
+                     :key="idx"
+                     @click="activePreviewImage = img"
+                     class="group relative w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 border-2 transition-all duration-300 bg-white shadow-md active:scale-95"
+                     :class="activePreviewImage === img ? 'border-blue-600 scale-105' : 'border-transparent opacity-60 hover:opacity-100 hover:scale-105'"
+                   >
+                      <video v-if="adminStore.isVideo(img)" :src="adminStore.resolveImageUrl(img)" class="w-full h-full object-cover"></video>
+                      <img v-else :src="adminStore.resolveImageUrl(img)" class="w-full h-full object-cover" />
+                      <div v-if="activePreviewImage === img" class="absolute inset-0 bg-blue-600/10 flex items-center justify-center">
+                         <div class="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping"></div>
+                      </div>
+                   </button>
+                </div>
+             </div>
+
+             <!-- Info Section (Right) -->
+             <div class="lg:w-2/5 p-12 flex flex-col h-full bg-white overflow-y-auto custom-scrollbar">
+                <div class="flex-1">
+                   <!-- Breadcrumb & Brand -->
+                   <div class="flex items-center gap-3 mb-4">
+                      <span class="text-[10px] font-black uppercase text-blue-600 tracking-[0.2em]">{{ newProduct.brand || 'DYNAMITE PRO' }}</span>
+                      <ChevronRight size="12" class="text-slate-300" />
+                      <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest">{{ newProduct.category }}</span>
+                   </div>
+
+                   <!-- Title & Identity -->
+                   <div class="space-y-4 mb-8">
+                      <h1 class="text-4xl font-black italic uppercase tracking-tighter text-slate-900 leading-[1.1]">{{ newProduct.name }}</h1>
+                      <div class="flex flex-wrap items-center gap-4">
+                         <div class="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
+                            <span class="text-[9px] font-black uppercase text-slate-400 font-mono">SKU</span>
+                            <span class="text-[11px] font-black text-slate-900 font-mono">{{ newProduct.sku || 'N/A' }}</span>
+                         </div>
+                         <div 
+                           class="px-4 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border italic"
+                           :class="{
+                              'bg-slate-50 text-slate-400 border-slate-100': !newProduct.status || ['Draft', 'draft'].includes(newProduct.status),
+                              'bg-emerald-50 text-emerald-600 border-emerald-100': ['Active', 'active'].includes(newProduct.status),
+                              'bg-orange-50 text-orange-600 border-orange-100': ['Under Review', 'under_review'].includes(newProduct.status),
+                              'bg-red-50 text-red-600 border-red-100': ['Inactive', 'inactive'].includes(newProduct.status)
+                           }"
+                         >
+                           {{ newProduct.status || 'Draft' }} Phase
+                         </div>
+                      </div>
+                   </div>
+
+                   <!-- Commercial Hub (Price & Stock) -->
+                   <div class="grid grid-cols-1 gap-6 mb-10">
+                      <div class="bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl shadow-slate-900/20 relative overflow-hidden group">
+                         <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-600/20 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-700"></div>
+                         <p class="text-[10px] font-black uppercase text-white/40 mb-3 tracking-[0.2em] flex items-center gap-2">
+                           <DollarSign size="12" /> Commercial Ledger
+                         </p>
+                         <div class="flex items-baseline gap-4 mb-6">
+                            <h4 class="text-5xl font-black italic tracking-tighter">₹{{ Number(newProduct.salePrice || 0).toLocaleString() }}</h4>
+                            <span v-if="newProduct.mrp > newProduct.salePrice" class="text-xl font-bold text-white/30 line-through tracking-tighter">₹{{ Number(newProduct.mrp || 0).toLocaleString() }}</span>
+                         </div>
+                         <div class="flex items-center gap-6 pt-6 border-t border-white/5">
+                            <div>
+                               <p class="text-[8px] font-black uppercase text-white/30 tracking-widest mb-1">Global Stock</p>
+                               <p class="text-xl font-black">{{ newProduct.stock || 0 }} <span class="text-[10px] text-white/40">Units</span></p>
+                            </div>
+                            <div class="w-px h-8 bg-white/5"></div>
+                            <div>
+                               <p class="text-[8px] font-black uppercase text-white/30 tracking-widest mb-1">Taxation</p>
+                               <p class="text-xl font-black">{{ newProduct.taxPercent || 0 }}% <span class="text-[10px] text-white/40">GST</span></p>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+
+                   <!-- Narrative / Description -->
+                   <div v-if="newProduct.description" class="mb-10">
+                      <h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-4 flex items-center gap-2">
+                        <Info size="14"/> The Curation Narrative
+                      </h3>
+                      <div class="prose prose-slate max-w-none font-medium text-slate-600 leading-relaxed text-sm italic" v-html="newProduct.description"></div>
+                   </div>
+
+                   <!-- Variant Architecture -->
+                   <div class="space-y-8 mb-10">
+                      <div v-for="(v, vIdx) in (newProduct.variants || []).filter(v => v.color)" :key="vIdx" class="space-y-4">
+                         <div class="flex items-center justify-between">
+                            <h4 class="text-[10px] font-black uppercase tracking-widest text-slate-400">{{ v.color }} Dimensons</h4>
+                            <span class="text-[9px] font-bold text-slate-300 uppercase">{{ v.sizes.length }} Variations</span>
+                         </div>
+                         <div class="flex flex-wrap gap-3">
+                            <div v-for="(s, sIdx) in v.sizes" :key="sIdx" class="px-5 py-3 bg-white border border-slate-100 rounded-2xl flex items-center gap-6 shadow-sm group hover:border-blue-600 transition-all cursor-default">
+                               <div class="flex flex-col">
+                                  <span class="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Size</span>
+                                  <span class="text-[13px] font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase leading-none">{{ s.size || 'N/A' }}</span>
+                               </div>
+                               <div class="w-px h-6 bg-slate-100"></div>
+                               <div class="flex flex-col">
+                                  <span class="text-[8px] font-black uppercase text-slate-400 leading-none mb-1">Onhand</span>
+                                  <div class="flex items-center gap-2 leading-none">
+                                     <div class="w-1.5 h-1.5 rounded-full" :class="s.stock > 0 ? 'bg-emerald-500' : 'bg-red-500'"></div>
+                                     <span class="text-[11px] font-bold text-slate-900">{{ s.stock }}</span>
+                                  </div>
+                               </div>
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+
+                   <!-- Technical Specifications Table -->
+                   <div v-if="newProduct.specs && newProduct.specs.length > 0" class="mb-10">
+                      <h3 class="text-xs font-black uppercase tracking-[0.2em] text-slate-400 mb-6 flex items-center gap-2">
+                         <List size="14" /> Technical Parameters
+                      </h3>
+                      <div class="border border-slate-100 rounded-3xl overflow-hidden divide-y divide-slate-50">
+                         <div v-for="(spec, idx) in newProduct.specs" :key="idx" class="flex items-center p-4 hover:bg-slate-50 transition-colors">
+                            <div class="w-1/3 text-[10px] font-black uppercase text-slate-400 tracking-wider">{{ spec.key }}</div>
+                            <div class="w-2/3 text-[11px] font-black text-slate-800 italic uppercase">{{ spec.value }}</div>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+
+                <!-- Attributes Summary Footer (View Perspective) -->
+                <div class="mt-auto pt-10 grid grid-cols-2 gap-4">
+                   <div class="p-5 bg-slate-50 rounded-3xl border border-slate-100 transition-all group">
+                      <p class="text-[8px] font-black uppercase text-slate-400 mb-1 group-hover:text-blue-600 tracking-widest">Fit Segment</p>
+                      <p class="text-xs font-black text-slate-900 uppercase italic">{{ newProduct.fit || 'Regular Segment' }}</p>
+                   </div>
+                   <div class="p-5 bg-slate-50 rounded-3xl border border-slate-100 transition-all group">
+                      <p class="text-[8px] font-black uppercase text-slate-400 mb-1 group-hover:text-blue-600 tracking-widest">Logic Tier</p>
+                      <p class="text-xs font-black text-slate-900 uppercase italic">{{ (newProduct.status || 'Draft').toUpperCase() }}</p>
+                   </div>
+                </div>
+             </div>
+          </div>
+
           <!-- Modal Footer -->
           <div class="p-8 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between flex-shrink-0">
              <div class="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 tracking-widest">
@@ -1069,6 +1702,9 @@ onMounted(() => {
        :data="adminStore.products"
        @close="showAnalyticsModal = false"
      />
+
+    <!-- Global API Loader -->
+    <GlobalLoader />
   </div>
 </template>
 

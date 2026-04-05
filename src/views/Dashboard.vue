@@ -54,6 +54,8 @@ onMounted(async () => {
   await adminStore.fetchOrders()
   await adminStore.fetchSubscribers()
   await adminStore.fetchInventoryReport()
+  await adminStore.fetchLedger()
+  await adminStore.fetchDashboardAnalytics('2 Weeks')
 })
 </script>
 

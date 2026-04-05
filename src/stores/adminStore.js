@@ -62,6 +62,8 @@ export const useAdminStore = defineStore('admin', {
     ledger: [],
     expenses: [],
     vendorTransactions: [],
+    revenueChart: [],
+    topProducts: [],
     
     // UI State
     loading: false,
@@ -70,6 +72,12 @@ export const useAdminStore = defineStore('admin', {
       show: false,
       images: [],
       currentIndex: 0
+    },
+    notification: {
+      show: false,
+      title: '',
+      message: '',
+      type: 'info' // 'success' | 'error' | 'info' | 'warning'
     }
   }),
 
@@ -97,6 +105,8 @@ export const useAdminStore = defineStore('admin', {
       this.fetchInventoryInvoices();
       this.fetchInventoryReport();
       this.fetchDashboardStats();
+      this.fetchLedger();
+      this.fetchDashboardAnalytics();
     },
 
     // ─── Utility Actions ─────────────────────────────────────────────────────────
@@ -106,6 +116,11 @@ export const useAdminStore = defineStore('admin', {
       const baseUrl = this.s3BucketUrl.endsWith('/') ? this.s3BucketUrl : `${this.s3BucketUrl}/`;
       return `${baseUrl}${path}`;
     },
+    isVideo(path) {
+      if (!path) return false;
+      const videoExtensions = ['.mp4', '.mov', '.webm', '.ogg', '.m4v'];
+      return videoExtensions.some(ext => path.toLowerCase().endsWith(ext));
+    },
 
     async getPresignedUrl(fileName, fileType, folder = 'inventory') {
       try {
@@ -113,6 +128,18 @@ export const useAdminStore = defineStore('admin', {
         return response.data;
       } catch (error) {
         console.error('Failed to get presigned URL:', error);
+        throw error;
+      }
+    },
+    async uploadToS3(uploadUrl, file) {
+      try {
+        await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type }
+        });
+      } catch (error) {
+        console.error('Direct S3 Upload Failed:', error);
         throw error;
       }
     },
@@ -125,7 +152,8 @@ export const useAdminStore = defineStore('admin', {
         const data = response.data.items || response.data || [];
         this.products = Array.isArray(data) ? data.map(p => ({
             ...p,
-            id: p.productId || p.id
+            id: p.product_id || p.productId || p.id,
+            name: p.product_name || p.name
         })) : [];
       } catch (error) {
         console.error('Failed to fetch products:', error);
@@ -138,8 +166,13 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.post('/products/admin/products', product);
-        this.products.unshift(response.data);
-        return response.data;
+        const mapped = {
+          ...response.data,
+          id: response.data.product_id || response.data.productId || response.data.id,
+          name: response.data.product_name || response.data.name
+        };
+        this.products.unshift(mapped);
+        return mapped;
       } catch (error) {
         console.error('Failed to add product:', error);
         throw error;
@@ -151,9 +184,14 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.put(`/products/admin/products/${product.id}`, product);
+        const mapped = {
+          ...response.data,
+          id: response.data.product_id || response.data.productId || response.data.id,
+          name: response.data.product_name || response.data.name
+        };
         const index = this.products.findIndex(p => String(p.id) === String(product.id));
-        if (index !== -1) this.products[index] = response.data;
-        return response.data;
+        if (index !== -1) this.products[index] = mapped;
+        return mapped;
       } catch (error) {
         console.error('Failed to update product:', error);
         throw error;
@@ -173,18 +211,68 @@ export const useAdminStore = defineStore('admin', {
         this.loading = false;
       }
     },
+    async bulkUpdateProductStatus(productIds, status) {
+      this.loading = true;
+      try {
+        const response = await api.patch('/products/admin/products/bulk-status', { productIds, status });
+        
+        // Update local state for all affected products
+        if (response.data && response.data.results) {
+          response.data.results.forEach(res => {
+            const isSuccess = res.status === 'fulfilled' || res.status === 'success';
+            if (isSuccess) {
+              const index = this.products.findIndex(p => String(p.id) === String(res.id));
+              if (index !== -1) {
+                this.products[index].status = status;
+              }
+            }
+          });
+        }
+        
+        return response.data;
+      } catch (error) {
+        console.error('Failed to bulk update status:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
 
     // ─── Order & Customer Actions ────────────────────────────────────────────────
-    async fetchOrders(search = '') {
+    async fetchOrders(params = {}) {
       this.loading = true;
       this.error = null;
       try {
-        const response = await api.get('/admin/orders', { params: { search } });
-        this.orders = Array.isArray(response.data) ? response.data : [];
+        const response = await api.get('/admin/orders', { params });
+        const data = Array.isArray(response.data) ? response.data : [];
+        this.orders = data.map(o => ({
+          ...o,
+          id: o.order_id || o.id,
+          date: new Date(o.created_at || o.date).toLocaleDateString(),
+          total: o.total_amount || o.totalUSD || o.total
+        }));
       } catch (error) {
         console.error('Failed to fetch orders:', error);
         this.orders = [];
         this.error = 'Connection to ordering system lost.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchOrderDetail(orderId) {
+      this.loading = true;
+      try {
+        const response = await api.get(`/admin/orders/${orderId}`);
+        const order = {
+          ...response.data,
+          id: response.data.order_id || response.data.id,
+          date: new Date(response.data.created_at || response.data.date).toLocaleDateString(),
+          total: response.data.total_amount || response.data.total
+        };
+        return order;
+      } catch (error) {
+        console.error('Failed to fetch order detail:', error);
+        return null;
       } finally {
         this.loading = false;
       }
@@ -206,6 +294,20 @@ export const useAdminStore = defineStore('admin', {
         if (status === 'Delivered') this.fetchDailySummary(new Date().toISOString().split('T')[0]);
       } catch (error) {
         console.error('Failed to update order status:', error);
+      }
+    },
+    async updateOrderTracking(id, trackingNumber, courier) {
+      try {
+        await api.put(`/admin/orders/${id}/tracking`, { trackingNumber, courier });
+        const order = this.orders.find(o => String(o.id) === String(id));
+        if (order) {
+          order.tracking_number = trackingNumber;
+          order.courier = courier;
+          order.status = 'Shipped';
+        }
+      } catch (error) {
+        console.error('Failed to update tracking:', error);
+        throw error;
       }
     },
 
@@ -371,6 +473,15 @@ export const useAdminStore = defineStore('admin', {
         this.loading = false;
       }
     },
+    async fetchActiveInventoryItems(query = '') {
+      try {
+        const response = await api.get(`/inventory/active-items?q=${encodeURIComponent(query)}&limit=10`);
+        return response.data.items || [];
+      } catch (error) {
+        console.error('Failed to fetch linkable inventory:', error);
+        return [];
+      }
+    },
     async fetchInventoryInvoices() {
       try {
         const response = await api.get('/inventory/invoices');
@@ -496,6 +607,43 @@ export const useAdminStore = defineStore('admin', {
         return { grossRevenue: 0, totalExpenses: 0, netProfit: 0, transactions: [] };
       } finally {
         this.loading = false;
+      }
+    },
+    async fetchLedger() {
+      this.loading = true;
+      try {
+        const response = await api.get('/admin/ledger');
+        this.ledger = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch ledger:', error);
+        this.ledger = [];
+      } finally {
+        this.loading = false;
+      }
+    },
+    async addLedgerEntry(entry) {
+      this.loading = true;
+      try {
+        const response = await api.post('/admin/ledger', entry);
+        this.ledger.unshift(response.data);
+        return response.data;
+      } catch (error) {
+        console.error('Failed to add manual adjustment:', error);
+        throw error;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async fetchDashboardAnalytics(period = 'Monthly') {
+      try {
+        const [revRes, topRes] = await Promise.all([
+          api.get(`/admin/dashboard/revenue-chart?period=${period}`),
+          api.get('/admin/dashboard/top-products')
+        ]);
+        this.revenueChart = revRes.data || [];
+        this.topProducts = topRes.data || [];
+      } catch (error) {
+        console.error('Failed to fetch dashboard analytics:', error);
       }
     },
 
@@ -646,6 +794,21 @@ export const useAdminStore = defineStore('admin', {
       } else {
         this.imagePreview.currentIndex = this.imagePreview.images.length - 1
       }
+    },
+    showNotification(title, message, type = 'info') {
+      this.notification = {
+        show: true,
+        title: title || (type === 'error' ? 'Operational Alert' : 'System Message'),
+        message,
+        type
+      }
+      // Auto-hide success messages after 5s, leave errors for manual dismissal
+      if (type === 'success') {
+        setTimeout(() => this.closeNotification(), 5000)
+      }
+    },
+    closeNotification() {
+      this.notification.show = false
     }
   }
 })

@@ -8,7 +8,7 @@ import {
 } from 'chart.js'
 import { 
   X, Calendar as CalendarIcon, ChevronDown, BarChart3,
-  LineChart, BarChart2, PieChart, LayoutGrid
+  LineChart, BarChart2, PieChart, LayoutGrid, Zap
 } from 'lucide-vue-next'
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, LinearScale, PointElement, CategoryScale, BarElement, ArcElement, Filler)

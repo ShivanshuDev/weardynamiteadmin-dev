@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
 import { 
   Wallet, 
@@ -58,11 +58,25 @@ const handleAddManualEntry = () => {
   showManualModal.value = false
   newEntry.value = { type: 'Debit', category: 'Expense', amount: 0, description: '' }
 }
-
+  
+onMounted(() => {
+  adminStore.fetchLedger()
+})
+  
 const stats = computed(() => {
-  const credits = adminStore.ledger.filter(l => l.type === 'Credit').reduce((sum, l) => sum + l.amount, 0)
-  const debits = adminStore.ledger.filter(l => l.type === 'Debit').reduce((sum, l) => sum + l.amount, 0)
-  return { credits, debits, balance: credits - debits }
+  // Use the balanced totals for the visual cards
+  const credits = globalTotals.value.credit
+  const debits = globalTotals.value.debit
+  
+  // Real financial balance (Revenue - Expense)
+  const revenue = adminStore.ledger.filter(l => l.type === 'Credit').reduce((sum, l) => sum + l.amount, 0)
+  const expenses = adminStore.ledger.filter(l => l.type === 'Debit').reduce((sum, l) => sum + l.amount, 0)
+  
+  return { 
+    credits, 
+    debits, 
+    balance: revenue - expenses 
+  }
 })
 
 const groupedLedger = computed(() => {
@@ -390,7 +404,7 @@ const exportToPDF = () => {
              <h2 class="text-2xl font-black text-slate-900 mt-1 italic tracking-tighter">₹{{ stats.credits.toLocaleString() }}</h2>
           </div>
           <div class="flex items-center gap-1.5 text-emerald-600 font-black text-[9px] uppercase bg-emerald-50 px-2 py-1 rounded-lg">
-             <ArrowUpRight size="12" /> +12.4%
+             <ArrowUpRight size="12" /> SYNCED
           </div>
        </div>
 
@@ -400,7 +414,7 @@ const exportToPDF = () => {
              <h2 class="text-2xl font-black text-slate-900 mt-1 italic tracking-tighter">₹{{ stats.debits.toLocaleString() }}</h2>
           </div>
           <div class="flex items-center gap-1.5 text-red-600 font-black text-[9px] uppercase bg-red-50 px-2 py-1 rounded-lg">
-             <ArrowDownLeft size="12" /> +4.2%
+             <ArrowDownLeft size="12" /> BALANCED
           </div>
        </div>
 
@@ -528,9 +542,13 @@ const exportToPDF = () => {
             </div>
           </div>
        
-        <div v-if="!groupedLedger.length" class="p-20 flex flex-col items-center justify-center text-slate-300 gap-4">
+        <div v-if="!groupedLedger.length && !adminStore.loading" class="p-20 flex flex-col items-center justify-center text-slate-300 gap-4">
           <AlertCircle size="48" stroke-width="1" />
           <p class="text-[10px] font-black uppercase tracking-widest">No spectral transactions detected</p>
+       </div>
+       <div v-if="adminStore.loading" class="p-20 flex flex-col items-center justify-center text-slate-300 gap-4">
+          <div class="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-[10px] font-black uppercase tracking-widest animate-pulse">Syncing Ledger...</p>
        </div>
     </div>
 
