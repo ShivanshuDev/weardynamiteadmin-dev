@@ -196,7 +196,9 @@ const newProduct = ref({
   isReturnable: true,
   returnDays: 7,
   codAvailable: false,
-  codCouponApplicable: false
+  codCouponApplicable: false,
+  isFreshArrival: false,
+  isMostPopular: false
 })
 
 // Taxonomy Logic Helpers
@@ -299,7 +301,8 @@ const openAddModal = () => {
     sku: '', barcode: '', stock: 0, lowStockAlert: 10,
     primaryColor: '', primarySize: '', fit: '', neckType: '', occasion: '', images: [''], variants: [{ color: '', sizes: [{ size: '', stock: 0 }] }],
     keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: [], image: '',
-    isReturnable: true, returnDays: 7, codAvailable: false, codCouponApplicable: false
+    isReturnable: true, returnDays: 7, codAvailable: false, codCouponApplicable: false,
+    isFreshArrival: false, isMostPopular: false
   }
   showAddModal.value = true
 }
@@ -376,17 +379,49 @@ const addImageField = () => {
 
 const removeImageField = (index) => {
   newProduct.value.images.splice(index, 1)
+  // Ensure the primary image field stays in sync if the first image was removed
+  if (index === 0) {
+    newProduct.value.image = newProduct.value.images[0] || ''
+  }
+}
+
+const moveImage = (index, direction) => {
+  const targetIndex = index + direction
+  if (targetIndex < 0 || targetIndex >= newProduct.value.images.length) return
+  
+  const currentImgs = [...newProduct.value.images]
+  const temp = currentImgs[index]
+  currentImgs[index] = currentImgs[targetIndex]
+  currentImgs[targetIndex] = temp
+  
+  newProduct.value.images = currentImgs
+  
+  // Sync primary image if position 0 was moved
+  if (index === 0 || targetIndex === 0) {
+    newProduct.value.image = newProduct.value.images[0] || ''
+  }
 }
 
 // Media Upload Logic
 const isUploadingMedia = ref(false)
 const handleProductImageUpload = async (event, index = null) => {
-  const file = event.target.files ? event.target.files[0] : null
-  if (!file) return
+  const files = event.target.files ? Array.from(event.target.files) : []
+  if (!files.length) return
   
   isUploadingMedia.value = true
-  await uploadFileToStore(file, index)
+  
+  // If editing/replacing a specific slot, only take the first file
+  if (index !== null) {
+    await uploadFileToStore(files[0], index)
+  } else {
+    // Sequential upload for multiple files
+    for (const file of files) {
+      await uploadFileToStore(file)
+    }
+  }
+  
   event.target.value = ''
+  isUploadingMedia.value = false
 }
 
 const uploadFileToStore = async (file, index = null) => {
@@ -400,14 +435,19 @@ const uploadFileToStore = async (file, index = null) => {
 
     // 3. Update state
     if (index !== null && index < newProduct.value.images.length) {
-      newProduct.value.images[index] = fileKey
+      newProduct.value.images.splice(index, 1, fileKey)
     } else {
       // Replace placeholder if present
       if (newProduct.value.images.length === 1 && !newProduct.value.images[0]) {
-        newProduct.value.images[0] = fileKey
+        newProduct.value.images.splice(0, 1, fileKey)
       } else {
         newProduct.value.images.push(fileKey)
       }
+    }
+    
+    // Sync primary image if this was the first one
+    if (index === 0 || (!newProduct.value.image && fileKey)) {
+      newProduct.value.image = newProduct.value.images[0] || fileKey
     }
   } catch (error) {
     console.error('Product Media Upload Failed:', error)
@@ -444,7 +484,8 @@ const saveProduct = async () => {
         ...newProduct.value,
         salePrice: Number(newProduct.value.salePrice) || 0,
         purchasePrice: Number(newProduct.value.purchasePrice) || 0,
-        stock: totalVariantStock
+        stock: totalVariantStock,
+        image: newProduct.value.images.filter(i => i)[0] || ''
       }
       await adminStore.updateProduct(updatedProduct)
     }
@@ -791,6 +832,8 @@ onMounted(() => {
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Disc %</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500">Promo / Coupon</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Stock</th>
+             <th class="px-3 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Fresh</th>
+             <th class="px-3 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Popular</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Features</th>
              <th class="px-4 py-4 text-[10px] font-black uppercase text-slate-500 text-center">Added Date</th>
              <th class="px-6 py-4 text-[10px] font-black uppercase text-slate-500 text-right">Actions</th>
@@ -865,6 +908,24 @@ onMounted(() => {
                   <span class="text-[11px] font-black" :class="p.stock <= (p.lowStockAlert || 10) ? 'text-red-500' : 'text-slate-800'">{{ p.stock }}</span>
                   <div v-if="p.stock <= (p.lowStockAlert || 10)" class="w-1 h-1 rounded-full bg-red-500 mt-0.5 animate-pulse"></div>
                </div>
+            </td>
+            <td class="px-3 text-center" @click.stop>
+               <button 
+                 @click="adminStore.updateProduct({ id: p.id, isFreshArrival: !p.isFreshArrival })"
+                 class="w-8 h-4 rounded-full transition-all relative"
+                 :class="p.isFreshArrival ? 'bg-blue-600' : 'bg-slate-200'"
+               >
+                 <div class="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" :style="{ left: p.isFreshArrival ? '18px' : '2px' }"></div>
+               </button>
+            </td>
+            <td class="px-3 text-center" @click.stop>
+               <button 
+                 @click="adminStore.updateProduct({ id: p.id, isMostPopular: !p.isMostPopular })"
+                 class="w-8 h-4 rounded-full transition-all relative"
+                 :class="p.isMostPopular ? 'bg-orange-500' : 'bg-slate-200'"
+               >
+                 <div class="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all" :style="{ left: p.isMostPopular ? '18px' : '2px' }"></div>
+               </button>
             </td>
             <td class="px-4 text-center">
                <div class="flex items-center justify-center gap-2">
@@ -1070,6 +1131,37 @@ onMounted(() => {
                              </button>
                           </div>
                           <p class="text-[9px] text-slate-400 font-bold uppercase italic tracking-tight">Changing status directly influences the product's commercial visibility across the platform ecosystem.</p>
+                       </div>
+                    </div>
+
+                    <!-- Feature Flag Integration -->
+                    <div class="grid grid-cols-2 gap-8 pt-6 border-t border-slate-50">
+                       <div class="space-y-4">
+                          <label class="text-[10px] font-black uppercase text-blue-500 tracking-widest">Homepage Visibility</label>
+                          <div class="flex items-center gap-6">
+                             <label class="flex items-center gap-3 cursor-pointer group">
+                                <div 
+                                   @click="newProduct.isFreshArrival = !newProduct.isFreshArrival"
+                                   class="w-10 h-5 rounded-full transition-all relative"
+                                   :class="newProduct.isFreshArrival ? 'bg-blue-600' : 'bg-slate-200'"
+                                >
+                                   <div class="absolute top-1 w-3 h-3 rounded-full bg-white transition-all" :style="{ left: newProduct.isFreshArrival ? '24px' : '4px' }"></div>
+                                </div>
+                                <span class="text-[11px] font-black uppercase tracking-widest group-hover:text-blue-600 transition-colors" :class="newProduct.isFreshArrival ? 'text-blue-600' : 'text-slate-400'">Fresh Arrival</span>
+                             </label>
+                             
+                             <label class="flex items-center gap-3 cursor-pointer group">
+                                <div 
+                                   @click="newProduct.isMostPopular = !newProduct.isMostPopular"
+                                   class="w-10 h-5 rounded-full transition-all relative"
+                                   :class="newProduct.isMostPopular ? 'bg-orange-500' : 'bg-slate-200'"
+                                >
+                                   <div class="absolute top-1 w-3 h-3 rounded-full bg-white transition-all" :style="{ left: newProduct.isMostPopular ? '24px' : '4px' }"></div>
+                                </div>
+                                <span class="text-[11px] font-black uppercase tracking-widest group-hover:text-orange-600 transition-colors" :class="newProduct.isMostPopular ? 'text-orange-500' : 'text-slate-400'">Most Popular</span>
+                             </label>
+                          </div>
+                          <p class="text-[9px] text-slate-400 font-bold uppercase italic tracking-tight">Enabling these flags promotes the item to targeted high-visibility sections on the main storefront.</p>
                        </div>
                     </div>
 
@@ -1400,7 +1492,7 @@ onMounted(() => {
                    </div>
 
                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      <div v-for="(img, idx) in newProduct.images" :key="idx" class="aspect-square bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative group overflow-hidden transition-all hover:border-blue-400">
+                      <div v-for="(img, idx) in newProduct.images" :key="`${idx}-${img}`" class="aspect-square bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center relative group overflow-hidden transition-all hover:border-blue-400">
                          <!-- Media Rendering -->
                          <template v-if="img">
                              <video v-if="adminStore.isVideo(img)" :src="adminStore.resolveImageUrl(img)" muted playsinline loop class="w-full h-full object-cover" onmouseenter="this.play()" onmouseleave="this.pause()"></video>
@@ -1412,21 +1504,40 @@ onMounted(() => {
                           </div>
 
                           <!-- Overlays -->
-                          <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
-                              <button 
-                                  @click="$refs[`fileInput_${idx}`][0].click()" 
-                                  :disabled="modalMode === 'view'"
-                                  class="p-3 bg-white text-black rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-xl"
-                              >
-                                  <Camera size="20" />
-                              </button>
+                          <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-4 z-10">
+                              <div class="flex items-center gap-3">
+                                  <button 
+                                      v-if="idx > 0"
+                                      @click.stop="moveImage(idx, -1)"
+                                      class="p-2.5 bg-white/20 text-white rounded-full hover:bg-white hover:text-black transition-all backdrop-blur-md"
+                                      title="Move Left"
+                                  >
+                                      <ChevronLeft size="18" />
+                                  </button>
+                                  <button 
+                                      @click="$refs[`fileInput_${idx}`][0].click()" 
+                                      :disabled="modalMode === 'view'"
+                                      class="p-3 bg-white text-black rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-xl"
+                                      title="Update Asset"
+                                  >
+                                      <Camera size="20" />
+                                  </button>
+                                  <button 
+                                      v-if="idx < newProduct.images.length - 1"
+                                      @click.stop="moveImage(idx, 1)"
+                                      class="p-2.5 bg-white/20 text-white rounded-full hover:bg-white hover:text-black transition-all backdrop-blur-md"
+                                      title="Move Right"
+                                  >
+                                      <ChevronRight size="18" />
+                                  </button>
+                              </div>
                               <input type="file" :ref="`fileInput_${idx}`" class="hidden" accept="image/*,video/*" @change="(e) => handleProductImageUpload(e, idx)" />
-                              <input v-model="newProduct.images[idx]" :disabled="modalMode === 'view'" placeholder="Or Paste URL..." class="mx-4 p-2 bg-white/95 backdrop-blur shadow-xl rounded-lg text-[9px] outline-none border border-slate-100 font-bold w-4/5 text-center" />
+                              <input v-model="newProduct.images[idx]" :disabled="modalMode === 'view'" placeholder="Or Paste URL..." class="mx-4 p-2.5 bg-white/95 backdrop-blur shadow-2xl rounded-xl text-[10px] outline-none border border-slate-100 font-bold w-4/5 text-center transition-all focus:ring-2 focus:ring-blue-500/20" />
                           </div>
 
                          <!-- Badge / Delete -->
                          <div v-if="idx === 0 && img" class="absolute top-3 left-3 px-2 py-1 bg-blue-600 text-white text-[8px] font-black uppercase tracking-widest rounded shadow-lg">Primary</div>
-                         <button v-if="newProduct.images.length > 1" @click="removeImageField(idx)" :disabled="modalMode === 'view'" class="absolute top-3 right-3 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0">
+                         <button v-if="newProduct.images.length > 1" @click.stop="removeImageField(idx)" :disabled="modalMode === 'view'" class="absolute top-3 right-3 p-1.5 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0 z-30 shadow-lg">
                             <X size="14" />
                          </button>
                       </div>
