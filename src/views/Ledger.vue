@@ -137,7 +137,7 @@ const groupedLedger = computed(() => {
         glType: balancingInfo.type,
         glName: balancingInfo.name, 
         glId: balancingInfo.id,
-        vendor: entry.referenceId.startsWith('ORD-') ? 'Online Customer' : 'Operational',
+        vendor: (entry.referenceId && entry.referenceId.startsWith('ORD-')) ? 'Online Customer' : 'Operational',
         debit: entry.type === 'Credit' ? entry.amount : null,
         credit: entry.type === 'Debit' ? entry.amount : null
       })
@@ -315,12 +315,12 @@ const exportToPDF = () => {
       const serial = showBalanced.value ? ((gIdx * 2) + rIdx + 1) : (gIdx + 1)
       const data = [
         serial,
-        row.date,
-        row.glType,
-        row.glName.substring(0, 18),
-        row.glId,
-        group.description.substring(0, 28),
-        row.vendor.substring(0, 18),
+        row.date || '-',
+        row.glType || 'Other',
+        (row.glName || 'Unknown').substring(0, 18),
+        row.glId || 'XXXX',
+        (group.description || 'No Description').substring(0, 28),
+        (row.vendor || 'N/A').substring(0, 18),
         row.debit ? `Rs. ${row.debit.toLocaleString()}` : '0',
         row.credit ? `Rs. ${row.credit.toLocaleString()}` : '0'
       ]

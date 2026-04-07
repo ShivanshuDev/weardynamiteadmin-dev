@@ -10,6 +10,7 @@ import {
 } from 'lucide-vue-next'
 import { QuillEditor } from '@vueup/vue-quill'
 import AnalyticsModal from '../components/AnalyticsModal.vue'
+import { PRODUCT_TAXONOMY, GENDERS } from '../data/categories'
 import '@vueup/vue-quill/dist/vue-quill.snow.css'
 import { jsPDF } from 'jspdf'
 
@@ -163,7 +164,7 @@ const newProduct = ref({
   status: 'Draft',
   category: '',
   subCategory: '',
-  gender: 'Unisex',
+  gender: 'Men',
   description: '',
   mrp: 0,
   salePrice: 0,
@@ -197,6 +198,28 @@ const newProduct = ref({
   codAvailable: false,
   codCouponApplicable: false
 })
+
+// Taxonomy Logic Helpers
+const getCategoriesForGender = (gender) => {
+  if (!gender || !PRODUCT_TAXONOMY[gender]) return []
+  return Object.keys(PRODUCT_TAXONOMY[gender])
+}
+
+const getSubCategoriesForCategory = (item) => {
+  const gender = item.gender
+  const category = item.category
+  if (!gender || !category || !PRODUCT_TAXONOMY[gender] || !PRODUCT_TAXONOMY[gender][category]) return []
+  return PRODUCT_TAXONOMY[gender][category]
+}
+
+const handleGenderChange = () => {
+  newProduct.value.category = ''
+  newProduct.value.subCategory = ''
+}
+
+const handleCategoryChange = () => {
+  newProduct.value.subCategory = ''
+}
 
 
 
@@ -271,7 +294,7 @@ const openAddModal = () => {
   activePreviewImage.value = ''
   // Reset newProduct with explicit boolean defaults
   newProduct.value = {
-    name: '', brand: 'Wear Dynamite', status: 'Draft', category: '', subCategory: '', gender: 'Unisex', description: '',
+    name: '', brand: 'Wear Dynamite', status: 'Draft', category: '', subCategory: '', gender: 'Men', description: '',
     mrp: 0, salePrice: 0, purchasePrice: 0, taxPercent: 18, isTaxable: true, discountPercentage: 0, promotionType: 'None', discountCoupon: '',
     sku: '', barcode: '', stock: 0, lowStockAlert: 10,
     primaryColor: '', primarySize: '', fit: '', neckType: '', occasion: '', images: [''], variants: [{ color: '', sizes: [{ size: '', stock: 0 }] }],
@@ -1010,24 +1033,23 @@ onMounted(() => {
 
                    <div class="grid grid-cols-3 gap-8">
                       <div class="space-y-2">
+                         <label class="text-[10px] font-black uppercase text-slate-400">Gender / Segment</label>
+                         <select v-model="newProduct.gender" @change="handleGenderChange" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
+                            <option v-for="g in GENDERS" :key="g" :value="g">{{ g }}</option>
+                         </select>
+                      </div>
+                      <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Category Selection</label>
-                         <select v-model="newProduct.category" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
+                         <select v-model="newProduct.category" @change="handleCategoryChange" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
                             <option value="">Select Category</option>
-                            <option>Apparel</option>
-                            <option>Accessories</option>
-                            <option>Footwear</option>
+                            <option v-for="cat in getCategoriesForGender(newProduct.gender)" :key="cat" :value="cat">{{ cat }}</option>
                          </select>
                       </div>
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Sub-Category</label>
-                         <input v-model="newProduct.subCategory" type="text" placeholder="e.g. T-Shirts" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
-                      </div>
-                      <div class="space-y-2">
-                         <label class="text-[10px] font-black uppercase text-slate-400">Gender Preference</label>
-                         <select v-model="newProduct.gender" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
-                            <option>Unisex</option>
-                            <option>Men</option>
-                            <option>Women</option>
+                         <select v-model="newProduct.subCategory" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm appearance-none transition-all shadow-sm">
+                            <option value="">Select Sub-Category</option>
+                            <option v-for="sub in getSubCategoriesForCategory(newProduct)" :key="sub" :value="sub">{{ sub }}</option>
                          </select>
                       </div>
                    </div>

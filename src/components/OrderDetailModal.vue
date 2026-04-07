@@ -118,7 +118,7 @@ const downloadInvoice = async (orderId) => {
     doc.text('WEAR DYNAMITE', 35, 28)
 
     doc.setFontSize(32); doc.setTextColor(240, 240, 240); doc.setFont('helvetica', 'bolditalic')
-    doc.text('INVOICE', 140, 45)
+    doc.text('ORDER INVOICE', 100, 45)
 
     doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
     doc.text(`${order.order_number || order.id}`, 190, 52, { align: 'right' })
@@ -155,9 +155,26 @@ const downloadInvoice = async (orderId) => {
     })
 
     // Totals
+    const subtotal = Number(order.subtotal || 0)
+    const tax = Number(order.tax_total || 0)
+    const shipping = Number(order.shipping_total || 0)
+    const discount = Number(order.discount_total || 0)
+    const grandTotal = Number(order.total_amount || order.total || 0)
+
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+    doc.text('SUBTOTAL', colX.total - 10, yPos + 6)
+    doc.text(`${subtotal.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
+    yPos += 7
+    doc.text('TAX', colX.total - 10, yPos + 6)
+    doc.text(`${tax.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
+    yPos += 7
+    doc.text('DISCOUNT', colX.total - 10, yPos + 6)
+    doc.text(`-${discount.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
+    yPos += 7
+    
     doc.setFont('helvetica', 'bold'); doc.rect(colX.desc, yPos, colX.end - colX.desc, 10)
     doc.text('GRAND TOTAL (INR)', colX.total - 10, yPos + 6.5)
-    doc.text(`${Number(order.total_amount || order.total).toFixed(2)}`, colX.end - 2, yPos + 6.5, { align: 'right' })
+    doc.text(`${grandTotal.toFixed(2)}`, colX.end - 2, yPos + 6.5, { align: 'right' })
 
     doc.save(`Invoice_${orderId}.pdf`)
   } catch (error) {

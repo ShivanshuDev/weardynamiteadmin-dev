@@ -2,6 +2,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { X, Plus, Trash2, Save, FileText, User, ShoppingBag, Calendar, Info, Camera, Upload, Check, Layers } from 'lucide-vue-next'
 import { useAdminStore } from '../stores/adminStore'
+import { PRODUCT_TAXONOMY, GENDERS } from '../data/categories'
 
 const props = defineProps(['show', 'editInvoice'])
 const emit = defineEmits(['close', 'save', 'update'])
@@ -27,7 +28,7 @@ const invoiceForm = reactive({
       fabric: '',
       category: '',
       subCategory: '',
-      gender: 'Unisex',
+      gender: 'Men',
       occasion: '',
       images: [],
       orderId: '', 
@@ -35,6 +36,28 @@ const invoiceForm = reactive({
     }
   ]
 })
+
+// Taxonomy Logic Helpers
+const getCategoriesForGender = (gender) => {
+  if (!gender || !PRODUCT_TAXONOMY[gender]) return []
+  return Object.keys(PRODUCT_TAXONOMY[gender])
+}
+
+const getSubCategoriesForCategory = (item) => {
+  const gender = item.gender
+  const category = item.category
+  if (!gender || !category || !PRODUCT_TAXONOMY[gender] || !PRODUCT_TAXONOMY[gender][category]) return []
+  return PRODUCT_TAXONOMY[gender][category]
+}
+
+const handleGenderChange = (item) => {
+  item.category = ''
+  item.subCategory = ''
+}
+
+const handleCategoryChange = (item) => {
+  item.subCategory = ''
+}
 
 const addItem = () => {
   if (invoiceForm.items.length < 200) {
@@ -47,7 +70,7 @@ const addItem = () => {
       fabric: '', 
       category: '',
       subCategory: '',
-      gender: 'Unisex',
+      gender: 'Men',
       occasion: '',
       images: [],
       orderId: '', 
@@ -261,25 +284,23 @@ const totalInvoiceValue = computed(() => {
                     </div>
                     
                     <div class="space-y-2">
+                      <span class="text-[11px] font-black uppercase text-slate-400 tracking-tight">Gender / Segment</span>
+                      <select v-model="item.gender" @change="handleGenderChange(item)" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:18px_18px] bg-[right_8px_center] bg-no-repeat">
+                        <option v-for="g in GENDERS" :key="g" :value="g">{{ g }}</option>
+                      </select>
+                    </div>
+                    <div class="space-y-2">
                       <span class="text-[11px] font-black uppercase text-slate-400 tracking-tight">Category</span>
-                      <select v-model="item.category" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:18px_18px] bg-[right_8px_center] bg-no-repeat">
-                        <option value="">Select</option>
-                        <option>Apparel</option>
-                        <option>Footwear</option>
-                        <option>Accessories</option>
+                      <select v-model="item.category" @change="handleCategoryChange(item)" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:18px_18px] bg-[right_8px_center] bg-no-repeat">
+                        <option value="">Select Category</option>
+                        <option v-for="cat in getCategoriesForGender(item.gender)" :key="cat" :value="cat">{{ cat }}</option>
                       </select>
                     </div>
                     <div class="space-y-2">
                       <span class="text-[11px] font-black uppercase text-slate-400 tracking-tight">Sub-Category</span>
-                      <input v-model="item.subCategory" type="text" placeholder="e.g. T-Shirt" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all font-inter placeholder:font-normal" />
-                    </div>
-                    <div class="space-y-2">
-                      <span class="text-[11px] font-black uppercase text-slate-400 tracking-tight">Gender</span>
-                      <select v-model="item.gender" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:18px_18px] bg-[right_8px_center] bg-no-repeat">
-                        <option>Male</option>
-                        <option>Female</option>
-                        <option>Unisex</option>
-                        <option>Kids</option>
+                      <select v-model="item.subCategory" class="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-3 text-sm font-bold outline-none focus:border-blue-600 focus:bg-white transition-all appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20fill%3D%22none%22%20viewBox%3D%220%200%2020%2020%22%3E%3Cpath%20stroke%3D%22%236b7280%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20stroke-width%3D%221.5%22%20d%3D%22m6%208%204%204%204-4%22%2F%3E%3C%2Fsvg%3E')] bg-[length:18px_18px] bg-[right_8px_center] bg-no-repeat">
+                        <option value="">Select Sub-Category</option>
+                        <option v-for="sub in getSubCategoriesForCategory(item)" :key="sub" :value="sub">{{ sub }}</option>
                       </select>
                     </div>
                     <div class="space-y-2">
