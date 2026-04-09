@@ -8,8 +8,16 @@ export const useAdminStore = defineStore('admin', {
       home: { 
         carousel: [], 
         megaPromos: [], 
-        videoBlock: { perks: [] },
-        vipBanner: {},
+        videoBlock: { 
+          title: { text: '', color: '#000000', size: 48, bold: true }, 
+          description: { text: '', color: '#64748b', size: 16 },
+          perks: [],
+          perkStyle: { size: 10, color: '#000000', bold: true }
+        },
+        vipBanner: {
+          title: { text: '', color: '#ffffff', size: 32, bold: true },
+          description: { text: '', color: '#ffffff', size: 14 }
+        },
         whatWeDo: {},
         categories: [],
         trustFeatures: [],
@@ -17,7 +25,17 @@ export const useAdminStore = defineStore('admin', {
         newsletter: {}
       },
       standard: { features: [] },
-      process: { hero: {}, steps: [], cta: {} },
+      process: { 
+        hero: { 
+          title: { text: '', color: '#ffffff', size: 64, bold: true }, 
+          subtitle: { text: '', color: '#ffffff', size: 20 } 
+        }, 
+        steps: [], 
+        cta: { 
+          title: { text: '', color: '#000000', size: 42, bold: true }, 
+          subtitle: { text: '', color: '#666666', size: 18 } 
+        } 
+      },
       contact: { direct: { phone: [] } },
       policies: { 
         shippingAndReturns: { 
@@ -25,14 +43,9 @@ export const useAdminStore = defineStore('admin', {
           shippingProcess: { title: '', content: '' },
           refundPolicy: { title: '', content: '' }
         },
-        faq: { 
-          pageTitle: '', 
-          items: [] 
-        },
-        privacy: { 
-          pageTitle: '', 
-          content: '' 
-        }
+        faq: { pageTitle: 'Frequently Asked Questions', items: [] },
+        privacy: { pageTitle: 'Privacy Policy', content: '' },
+        terms: { pageTitle: 'Terms of Service', subtitle: '', lastUpdated: '', items: [] }
       }
     },
 
@@ -735,8 +748,191 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       this.error = null;
       try {
-        const response = await api.get('/admin/cms');
-        this.siteContent = response.data;
+        const response = await api.get('/admin/cms/public'); // Using public for consistency or keep /admin/cms
+        const data = response.data || {};
+        
+        // Merge with existing structure
+        this.siteContent = { 
+          ...this.siteContent,
+          ...data,
+          home: { 
+            ...this.siteContent.home, 
+            ...(data.home || {}),
+            carousel: (data.home?.carousel || []).map(slide => {
+              // Migration Logic: if slide has button1/button2 but no buttons array
+              if (!slide.buttons && (slide.button1 || slide.button2)) {
+                const buttons = [];
+                if (slide.button1?.text) buttons.push({ ...slide.button1, bg: '#000000', textColor: '#ffffff', border: false });
+                if (slide.button2?.text) buttons.push({ ...slide.button2, bg: '#ffffff', textColor: '#000000', border: true });
+                return { ...slide, buttons, align: slide.align || 'middle-left' };
+              }
+              // Ensure all existing buttons have styling defaults
+              if (slide.buttons) {
+                slide.buttons = slide.buttons.map(b => ({
+                  bg: '#000000',
+                  textColor: '#ffffff',
+                  border: false,
+                  ...b
+                }));
+              }
+              return { buttons: [], align: 'middle-left', ...slide };
+            }),
+            categories: (data.home?.categories && data.home.categories.length === 3) 
+              ? data.home.categories 
+              : [
+                  { title: "Men's Collection", link: '/shop?gender=Men', image: '' },
+                  { title: "Women's Collection", link: '/shop?gender=Women', image: '' },
+                  { title: "Kids' Collection", link: '/shop?gender=Kids', image: '' }
+                ],
+            trustFeatures: (data.home?.trustFeatures && data.home.trustFeatures.length === 3)
+              ? data.home.trustFeatures
+              : [
+                  { icon: 'Truck', title: 'Free Shipping', subtitle: 'On all orders above $100' },
+                  { icon: 'RotateCcw', title: '30 Days Return', subtitle: 'No questions asked policy' },
+                  { icon: 'ShieldCheck', title: 'Secure Payments', subtitle: '100% secure encrypted checkout' }
+                ],
+            videoBlock: {
+              title: {
+                text: typeof data.home?.videoBlock?.title === 'object' ? (data.home.videoBlock.title?.text ?? 'Move With Explosive Confidence.') : (data.home?.videoBlock?.title || 'Move With Explosive Confidence.'),
+                size: data.home?.videoBlock?.title?.size || 48,
+                color: data.home?.videoBlock?.title?.color || '#000000',
+                bold: data.home?.videoBlock?.title?.bold !== undefined ? data.home?.videoBlock?.title?.bold : true,
+                italic: data.home?.videoBlock?.title?.italic !== undefined ? data.home?.videoBlock?.title?.italic : true
+              },
+              description: {
+                text: typeof data.home?.videoBlock?.description === 'object' ? (data.home.videoBlock.description?.text ?? 'We source only the finest fabrics...') : (data.home?.videoBlock?.description || 'We source only the finest fabrics...'),
+                size: data.home?.videoBlock?.description?.size || 16,
+                color: data.home?.videoBlock?.description?.color || '#64748b',
+                bold: data.home?.videoBlock?.description?.bold || false,
+                italic: data.home?.videoBlock?.description?.italic || false
+              },
+              perks: data.home?.videoBlock?.perks || ['Breathable Organic Cottons', '30-Day Limitless Returns', 'Lightning Fast Delivery'],
+              perkStyle: {
+                size: data.home?.videoBlock?.perkStyle?.size || 10,
+                color: data.home?.videoBlock?.perkStyle?.color || '#000000',
+                bold: data.home?.videoBlock?.perkStyle?.bold !== undefined ? data.home?.videoBlock?.perkStyle?.bold : true
+              },
+              videoUrl: data.home?.videoBlock?.videoUrl || 'https://assets.mixkit.co/videos/preview/mixkit-fashion-model-posing-in-a-studio-setting-34444-large.mp4'
+            },
+            vipBanner: {
+              title: {
+                text: typeof data.home?.vipBanner?.title === 'object' ? (data.home.vipBanner.title?.text ?? 'Unlock The VIP Experience') : (data.home?.vipBanner?.title || 'Unlock The VIP Experience'),
+                size: data.home?.vipBanner?.title?.size || 32,
+                color: data.home?.vipBanner?.title?.color || '#ffffff',
+                bold: data.home?.vipBanner?.title?.bold !== undefined ? data.home?.vipBanner?.title?.bold : true
+              },
+              description: {
+                text: typeof data.home?.vipBanner?.description === 'object' ? (data.home.vipBanner.description?.text ?? 'Join the Dynamite Club today...') : (data.home?.vipBanner?.description || 'Join the Dynamite Club today...'),
+                size: data.home?.vipBanner?.description?.size || 14,
+                color: data.home?.vipBanner?.description?.color || '#ffffff'
+              },
+              bg: data.home?.vipBanner?.bg || '#4f46e5',
+              buttonText: data.home?.vipBanner?.buttonText || 'Become a Member',
+              link: data.home?.vipBanner?.link || '/login'
+            }
+          },
+          process: {
+            hero: {
+              image: data.process?.hero?.image || 'https://images.unsplash.com/photo-1563823293806-03f140026e6d?q=80&w=2000&auto=format&fit=crop',
+              title: {
+                text: typeof data.process?.hero?.title === 'object' ? (data.process.hero.title?.text ?? 'OUR PROCESS & CRAFTSMANSHIP') : (data.process?.hero?.title || 'OUR PROCESS & CRAFTSMANSHIP'),
+                size: data.process?.hero?.title?.size || 64,
+                color: data.process?.hero?.title?.color || '#ffffff',
+                bold: data.process?.hero?.title?.bold !== undefined ? data.process?.hero?.title?.bold : true,
+                italic: data.process?.hero?.title?.italic !== undefined ? data.process?.hero?.title?.italic : true
+              },
+              subtitle: {
+                text: typeof data.process?.hero?.subtitle === 'object' ? (data.process.hero.subtitle?.text ?? 'Take a look behind the curtain.') : (data.process?.hero?.subtitle || 'Take a look behind the curtain.'),
+                size: data.process?.hero?.subtitle?.size || 20,
+                color: data.process?.hero?.subtitle?.color || '#ffffff',
+                bold: data.process?.hero?.subtitle?.bold || false,
+                italic: data.process?.hero?.subtitle?.italic || false
+              }
+            },
+            steps: (data.process?.steps || [
+              { title: 'Source Finest Fabrics', have: 'Premium Pima Cotton', do: 'Iterative QC Testing' },
+              { title: 'Precision Cutting', have: 'Digital Patterns', do: 'Laser Guided Slicing' }
+            ]).map(s => ({
+              title: {
+                text: typeof s.title === 'object' ? (s.title?.text ?? 'New Milestone') : (s.title || 'New Milestone'),
+                size: s.title?.size || 32,
+                color: s.title?.color || '#111111',
+                bold: s.title?.bold !== undefined ? s.title?.bold : true,
+                italic: s.title?.italic || false
+              },
+              have: {
+                text: typeof s.have === 'object' ? (s.have?.text ?? 'Elements we possess...') : (s.have || 'Elements we possess...'),
+                size: s.have?.size || 14,
+                color: s.have?.color || '#555555',
+                bold: s.have?.bold || false,
+                italic: s.have?.italic || false
+              },
+              do: {
+                text: typeof s.do === 'object' ? (s.do?.text ?? 'Expert execution...') : (s.do || 'Expert execution...'),
+                size: s.do?.size || 14,
+                color: s.do?.color || '#555555',
+                bold: s.do?.bold || false,
+                italic: s.do?.italic || false
+              }
+            })),
+            cta: {
+              title: {
+                text: typeof data.process?.cta?.title === 'object' ? (data.process.cta.title?.text ?? 'Experience The Difference') : (data.process?.cta?.title || 'Experience The Difference'),
+                size: data.process?.cta?.title?.size || 42,
+                color: data.process?.cta?.title?.color || '#111111',
+                bold: data.process?.cta?.title?.bold !== undefined ? data.process?.cta?.title?.bold : true,
+                italic: data.process?.cta?.title?.italic || false
+              },
+              subtitle: {
+                text: typeof data.process?.cta?.subtitle === 'object' ? (data.process.cta.subtitle?.text ?? "Feel the craftsmanship.") : (data.process?.cta?.subtitle || "Feel the craftsmanship."),
+                size: data.process?.cta?.subtitle?.size || 18,
+                color: data.process?.cta?.subtitle?.color || '#666666',
+                bold: data.process?.cta?.subtitle?.bold || false,
+                italic: data.process?.cta?.subtitle?.italic || false
+              }
+            }
+          },
+          contact: {
+            title: data.contact?.title || 'Contact Us',
+            subtitle: data.contact?.subtitle || "We'd love to hear from you.",
+            direct: {
+              phone: data.contact?.direct?.phone || [],
+              email: data.contact?.direct?.email || 'support@weardynamite.com'
+            },
+            mapUrl: data.contact?.mapUrl || ''
+          },
+          policies: {
+            shippingAndReturns: {
+              pageTitle: data.policies?.shippingAndReturns?.pageTitle || 'Shipping & Returns',
+              shippingProcess: {
+                title: data.policies?.shippingAndReturns?.shippingProcess?.title || 'Shipping Process',
+                content: data.policies?.shippingAndReturns?.shippingProcess?.content || (typeof data.policies?.shipping === 'string' ? data.policies.shipping : '')
+              },
+              refundPolicy: {
+                title: data.policies?.shippingAndReturns?.refundPolicy?.title || 'Refund Policy',
+                content: data.policies?.shippingAndReturns?.refundPolicy?.content || ''
+              }
+            },
+            faq: {
+              pageTitle: data.policies?.faq?.pageTitle || 'Frequently Asked Questions',
+              items: Array.isArray(data.policies?.faq?.items) ? data.policies.faq.items : (Array.isArray(data.policies?.faq) ? data.policies.faq : [])
+            },
+            privacy: {
+              pageTitle: data.policies?.privacy?.pageTitle || 'Privacy Policy',
+              content: data.policies?.privacy?.content || (typeof data.policies?.privacy === 'string' ? data.policies.privacy : '')
+            },
+            terms: {
+              pageTitle: data.policies?.terms?.pageTitle || 'Terms of Service',
+              subtitle: data.policies?.terms?.subtitle || '',
+              lastUpdated: data.policies?.terms?.lastUpdated || '',
+              items: Array.isArray(data.policies?.terms?.items) 
+                ? data.policies.terms.items 
+                : (typeof data.policies?.terms?.content === 'string' 
+                  ? [{ title: 'Main Terms', content: data.policies.terms.content }] 
+                  : (typeof data.policies?.terms === 'string' ? [{ title: 'Main Terms', content: data.policies.terms }] : []))
+            }
+          }
+        };
       } catch (error) {
         console.error('Failed to fetch CMS:', error);
         this.error = 'Website architecture sync failed.';
@@ -744,14 +940,25 @@ export const useAdminStore = defineStore('admin', {
         this.loading = false;
       }
     },
-    async updateCmsSection(section, data) {
+    async updateCmsSection(sectionPath, data) {
       try {
-        const response = await api.put(`/admin/cms/home/${section}`, data);
-        if (this.siteContent.home) {
-           this.siteContent.home[section] = response.data[section];
+        const response = await api.put(`/admin/cms/${sectionPath.replace(/\./g, '/')}`, data);
+        
+        // Dynamic update of local state using dot notation path
+        const parts = sectionPath.split('.');
+        let target = this.siteContent;
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (!target[parts[i]]) target[parts[i]] = {};
+          target = target[parts[i]];
         }
+        target[parts[parts.length - 1]] = data;
+        
+        this.showNotification('Success', 'Website architecture updated live.', 'success');
+        return response.data;
       } catch (error) {
-        console.error(`Failed to update CMS ${section}:`, error);
+        console.error(`Failed to update CMS ${sectionPath}:`, error);
+        this.showNotification('Error', 'Failed to synchronize architecture.', 'error');
+        throw error;
       }
     },
 
@@ -811,6 +1018,18 @@ export const useAdminStore = defineStore('admin', {
       } else {
         this.imagePreview.currentIndex = 0
       }
+    },
+    removeFaq(index) {
+      if (this.siteContent.policies.faq.items.length > 1) {
+        this.siteContent.policies.faq.items.splice(index, 1);
+      }
+    },
+    addTermsSection() {
+      if (!this.siteContent.policies.terms.items) this.siteContent.policies.terms.items = [];
+      this.siteContent.policies.terms.items.push({ title: 'New Section', content: '' });
+    },
+    removeTermsSection(index) {
+      this.siteContent.policies.terms.items.splice(index, 1);
     },
     prevPreview() {
       if (this.imagePreview.currentIndex > 0) {
