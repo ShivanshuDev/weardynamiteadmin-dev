@@ -76,6 +76,11 @@ const router = createRouter({
       component: () => import('../views/EmployeeManager.vue')
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('../views/NotificationManager.vue')
+    },
+    {
       path: '/profile',
       name: 'profile',
       component: () => import('../views/AdminProfile.vue')

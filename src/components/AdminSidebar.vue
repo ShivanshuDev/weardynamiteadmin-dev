@@ -18,7 +18,8 @@ import {
   Wallet,
   Building2,
   Receipt,
-  PanelLeftClose
+  PanelLeftClose,
+  Bell
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -44,6 +45,7 @@ const menuItems = [
   { name: 'Store CMS', path: '/content', icon: ImageIcon },
   { name: 'Inquiries', path: '/inquiries', icon: Mail },
   { name: 'Subscribers', path: '/subscribers', icon: UserPlus },
+  { name: 'Broadcasts', path: '/notifications', icon: Bell },
   { name: 'Policy Suite', path: '/policies', icon: ShieldAlert },
 ]
 

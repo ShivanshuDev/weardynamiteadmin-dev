@@ -64,6 +64,7 @@ export const useAdminStore = defineStore('admin', {
     inquiries: [],
     blogs: [],
     subscribers: [],
+    notifications: [],
     
     // Financials & Partners
     inventoryInvoices: [],
@@ -120,6 +121,7 @@ export const useAdminStore = defineStore('admin', {
       this.fetchDashboardStats();
       this.fetchLedger();
       this.fetchDashboardAnalytics();
+      this.fetchNotifications();
     },
 
     // ─── Utility Actions ─────────────────────────────────────────────────────────
@@ -236,6 +238,30 @@ export const useAdminStore = defineStore('admin', {
         this.showNotification('Deleted', 'Article and all versions removed.', 'success');
       } catch (error) {
         this.showNotification('Error', 'Failed to delete article.', 'error');
+      }
+    },
+
+    // ─── Broadcast & Marketing Actions ──────────────────────────────────────────
+    async fetchNotifications() {
+      try {
+        const response = await api.get('/notifications/admin/broadcast');
+        this.notifications = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed to fetch broadcasts:', error);
+      }
+    },
+    async broadcastNotification(payload) {
+      this.loading = true;
+      try {
+        const response = await api.post('/notifications/admin/broadcast', payload);
+        this.showNotification('Broadcast Started', 'Your messages are being dispatched across selected channels.', 'success');
+        this.fetchNotifications(); // Refresh list to show the new campaign
+        return response.data;
+      } catch (error) {
+        this.showNotification('Broadcast Failed', error.response?.data?.message || 'Check your targets and try again.', 'error');
+        throw error;
+      } finally {
+        this.loading = false;
       }
     },
 
