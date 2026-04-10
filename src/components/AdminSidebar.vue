@@ -30,6 +30,7 @@ const menuItems = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'Products', path: '/products', icon: Package },
   { name: 'Orders', path: '/orders', icon: ShoppingCart },
+  { name: 'Bulk Orders', path: '/bulk-orders', icon: Package },
   { name: 'Inventory', path: '/inventory', icon: Boxes },
   { 
     name: 'Financials', 

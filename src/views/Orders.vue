@@ -1112,34 +1112,9 @@ const exportOrdersToExcel = () => {
         </tbody>
       </table>
 
-      <!-- Pagination Footer -->
-      <div class="mt-auto border-t border-slate-50 bg-slate-50/30 p-4 flex items-center justify-between">
-         <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-            Showing {{ (currentPage-1)*itemsPerPage + 1 }} to {{ Math.min(currentPage*itemsPerPage, filteredCustomers.length) }} of {{ filteredCustomers.length }} Customers
-         </p>
-         <div class="flex items-center gap-2">
-            <button 
-              @click="prevPage" 
-              :disabled="currentPage === 1"
-              class="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-black hover:border-black disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronLeft size="16" />
-            </button>
-            <div class="flex items-center gap-1">
-               <span class="text-xs font-black px-3 py-1 bg-black text-white rounded-lg">{{ currentPage }}</span>
-               <span class="text-[10px] font-black text-slate-300 uppercase px-2">of</span>
-               <span class="text-xs font-black text-slate-500">{{ totalPages }}</span>
-            </div>
-            <button 
-              @click="nextPage" 
-              :disabled="currentPage === totalPages"
-              class="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-black hover:border-black disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight size="16" />
-            </button>
-         </div>
       </div>
     </div>
+
 
      <!-- Order Detail Modal -->
       <OrderDetailModal 
