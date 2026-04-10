@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { 
   X, User, Mail, Phone, MapPin, 
   ShoppingCart, Calendar, Clock, 
-  ChevronRight, ExternalLink
+  ChevronRight, ExternalLink, Hash,
+  Smartphone, History, Heart
 } from 'lucide-vue-next'
 import api from '../utils/api'
 
@@ -88,9 +89,27 @@ const getStatusColor = (status) => {
                   <Phone size="16" class="text-slate-300" />
                   <span class="text-xs font-bold">{{ customer.phone || 'N/A' }}</span>
                 </div>
+                <div v-if="customer.phoneSecondary" class="flex items-center gap-3 text-slate-600">
+                  <Smartphone size="16" class="text-slate-300" />
+                  <span class="text-xs font-bold">{{ customer.phoneSecondary }}</span>
+                </div>
                 <div class="flex items-center gap-3 text-slate-600">
                   <Calendar size="16" class="text-slate-300" />
                   <span class="text-xs font-bold uppercase">Joined {{ customer.createdAt?.split('T')[0] }}</span>
+                </div>
+                <div v-if="customer.dob" class="flex items-center gap-3 text-slate-600">
+                  <History size="16" class="text-slate-300" />
+                  <span class="text-xs font-bold uppercase">DOB: {{ new Date(customer.dob).toLocaleDateString() }}</span>
+                </div>
+                <div v-if="customer.interests" class="pt-2">
+                   <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                     <Heart size="10" /> Interests
+                   </p>
+                   <div class="flex flex-wrap gap-2">
+                      <span v-for="tag in customer.interests.split(',')" :key="tag" class="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase rounded-md border border-blue-100 italic">
+                        {{ tag.trim() }}
+                      </span>
+                   </div>
                 </div>
               </div>
             </div>
