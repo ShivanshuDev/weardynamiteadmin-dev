@@ -56,7 +56,10 @@ watch(selectedTimeframe, (newVal) => {
 const ordersChartData = computed(() => {
   const data = adminStore.revenueChart || []
   return {
-    labels: data.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+    labels: data.map(d => {
+      const date = new Date(d.date)
+      return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
+    }),
     datasets: [{
       label: 'Money Flow (In)',
       data: data.map(d => d.revenue),
@@ -72,7 +75,10 @@ const ordersChartData = computed(() => {
 const profitLossChartData = computed(() => {
   const data = adminStore.revenueChart || []
   return {
-    labels: data.map(d => new Date(d.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })),
+    labels: data.map(d => {
+      const date = new Date(d.date)
+      return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
+    }),
     datasets: [
       {
         label: 'Gross Revenue',

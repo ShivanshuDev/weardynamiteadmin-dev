@@ -51,8 +51,9 @@ const updateStatus = async (newStatus) => {
 
 const formatDateNumeric = (dateStr) => {
   if (!dateStr) return '-'
-  const d = new Date() // Fallback to current if no date provided for inventory interaction
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
+  const d = new Date(dateStr || new Date())
+  if (isNaN(d.getTime())) return '-'
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 const exportToPDF = () => {

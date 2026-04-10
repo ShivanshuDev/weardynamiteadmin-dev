@@ -32,7 +32,8 @@ const filters = ref({
   condition: 'All',
   location: '',
   startDate: '',
-  endDate: ''
+  endDate: '',
+  minAge: ''
 })
 
 const statusTabs = ['All', 'Draft', 'Active', 'Under Review', 'Inactive']
@@ -45,7 +46,7 @@ const selectedSkuProduct = ref(null)
 const selectedItems = ref([])
 
 // Pagination State (Local)
-const itemsPerPage = 8
+const itemsPerPage = 10
 const inventoryPage = ref(1)
 
 const handleLoadMore = () => {
@@ -74,7 +75,8 @@ const resetFilters = () => {
     condition: 'All',
     location: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    minAge: ''
   }
   applyFilters()
 }
@@ -129,7 +131,8 @@ const downloadExcel = () => {
     'Unit Cost (INR)': i.cost_price || 0,
     'Total Valuation (INR)': i.total_cost || 0,
     'Vendor': i.vendor_name || 'N/A',
-    'Date Added': new Date(i.created_at).toLocaleDateString()
+    'Date Added': i.addedDate,
+    'Stock Age (Days)': i.stockAge
   }))
 
   const ws = XLSX.utils.json_to_sheet(data)
@@ -147,7 +150,7 @@ const downloadPDF = () => {
   doc.setTextColor(100, 116, 139)
   doc.text(`Official Stock Audit Report | Generated on ${new Date().toLocaleString()}`, 14, 30)
 
-  const columns = ['S.No.', 'SKU', 'Product', 'Stock', 'Health', 'Workflow', 'Location', 'Valuation']
+  const columns = ['S.No.', 'SKU', 'Product', 'Stock', 'Health', 'Workflow', 'Added Date', 'Age', 'Location', 'Valuation']
   const rows = inventoryData.value.map((i, index) => [
     index + 1,
     i.sku,
@@ -155,6 +158,8 @@ const downloadPDF = () => {
     i.stock,
     i.healthStatus,
     i.status || 'Draft',
+    i.addedDate,
+    `${i.stockAge}d`,
     i.location,
     `INR ${(i.total_cost || 0).toLocaleString()}`
   ])
@@ -167,10 +172,15 @@ const downloadPDF = () => {
     headStyles: { fillColor: [37, 99, 235], fontStyle: 'bold' },
     styles: { fontSize: 7.5, cellPadding: 2.5 },
     columnStyles: {
-      0: { cellWidth: 15 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 50 },
-      7: { halign: 'right', fontStyle: 'bold' }
+      0: { cellWidth: 10 },
+      1: { cellWidth: 25 },
+      2: { cellWidth: 35 },
+      3: { cellWidth: 15 },
+      4: { cellWidth: 20 },
+      5: { cellWidth: 20 },
+      6: { cellWidth: 25 },
+      7: { cellWidth: 15 },
+      9: { halign: 'right', fontStyle: 'bold' }
     }
   })
 
@@ -185,7 +195,19 @@ const inventoryData = computed(() => {
     sku: r.inventory_id || r.invoice_number,
     stock: r.quantity || 0,
     healthStatus: (r.quantity || 0) <= 5 ? 'Critical' : (r.quantity || 0) <= 20 ? 'Low' : 'Healthy',
-    location: r.vendor_name || 'Main Warehouse'
+    location: r.vendor_name || 'Main Warehouse',
+    addedDate: (() => {
+      const d = new Date(r.created_at)
+      if (isNaN(d.getTime())) return '-'
+      return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+    })(),
+    stockAge: (() => {
+      if (!r.created_at) return 0
+      const d = new Date(r.created_at)
+      if (isNaN(d.getTime())) return 0
+      const diff = new Date() - d
+      return Math.floor(diff / (1000 * 60 * 60 * 24))
+    })()
   }))
 })
 
@@ -197,7 +219,7 @@ const paginatedInventory = computed(() => {
 const inventoryTotalPages = computed(() => Math.ceil(inventoryData.value.length / itemsPerPage))
 
 // Local Pagination for Invoices
-const itemsPerPageInvoices = 8
+const itemsPerPageInvoices = 10
 const invoicePage = ref(1)
 
 const allInvoices = computed(() => {
@@ -306,6 +328,7 @@ const handleUpdateInvoice = (id, data) => {
          </div>
          <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div class="space-y-2"><label class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1">Location / Vendor</label><input v-model="filters.location" type="text" placeholder="Search Location..." class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-xs font-bold transition-all" /></div>
+            <div class="space-y-2"><label class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1">Min Stock Age (Days)</label><input v-model="filters.minAge" type="number" placeholder="e.g. 30" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-xs font-bold transition-all" /></div>
             <div class="space-y-2"><label class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1">Start Date</label><input v-model="filters.startDate" type="date" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-xs font-bold transition-all" /></div>
             <div class="space-y-2"><label class="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1">End Date</label><input v-model="filters.endDate" type="date" class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-xs font-bold transition-all" /></div>
             <div class="flex items-end gap-3"><button @click="applyFilters" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2"><Zap size="14" /> Apply Intelligence</button><button @click="resetFilters" class="px-5 bg-slate-100 text-slate-400 py-3 rounded-xl hover:bg-red-600 hover:text-white transition-all flex items-center justify-center"><X size="14" /></button></div>
@@ -329,6 +352,8 @@ const handleUpdateInvoice = (id, data) => {
               <th class="px-8 py-3">Level</th>
               <th class="px-8 py-3 text-center">Condition</th>
               <th class="px-8 py-3 text-center">Workflow</th>
+              <th class="px-8 py-3 text-center">Added Date</th>
+              <th class="px-8 py-3 text-center">Stock Age</th>
               <th class="px-8 py-3">Location</th>
             </tr>
           </thead>
@@ -340,6 +365,13 @@ const handleUpdateInvoice = (id, data) => {
               <td class="px-8 py-1"><div class="flex items-baseline gap-1"><span class="text-xl font-black" :class="i.stock < 20 ? 'text-red-600' : 'text-slate-900'">{{ (i.stock || 0) }}</span><span class="text-[8px] text-slate-400 font-bold uppercase">Units</span></div></td>
               <td class="px-8 py-1 text-center"><span class="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest inline-flex border" :class="{'bg-emerald-50 text-emerald-600 border-emerald-100': i.healthStatus === 'Healthy', 'bg-orange-50 text-orange-600 border-orange-100': i.healthStatus === 'Low', 'bg-red-50 text-red-600 border-red-100 animate-pulse': i.healthStatus === 'Critical'}">{{ i.healthStatus }}</span></td>
               <td class="px-8 py-1 text-center"><span class="px-3 py-1 bg-slate-100 rounded-lg text-[9px] font-black text-slate-600 uppercase tracking-widest border border-slate-200 shadow-sm">{{ i.status || 'Draft' }}</span></td>
+              <td class="px-8 py-1 text-center"><span class="text-[10px] font-black text-slate-400 uppercase">{{ i.addedDate }}</span></td>
+              <td class="px-8 py-1 text-center">
+                 <div class="flex flex-col items-center">
+                    <span class="text-sm font-black text-slate-900">{{ i.stockAge }}</span>
+                    <span class="text-[8px] font-bold text-slate-400 uppercase">Days</span>
+                 </div>
+              </td>
               <td class="px-8 py-1"><span class="text-[10px] font-black text-slate-400 uppercase border border-slate-100 px-3 py-1 rounded-lg">{{ i.location }}</span></td>
             </tr>
           </tbody>
@@ -408,7 +440,15 @@ const handleUpdateInvoice = (id, data) => {
                      <span class="text-sm font-black text-blue-600 tracking-tighter uppercase">{{ inv.invoice_number }}</span>
                    </td>
                    <td class="px-8 py-1">
-                     <span class="text-[10px] font-bold text-slate-500 uppercase">{{ inv.invoice_date ? new Date(inv.invoice_date).toLocaleDateString() : (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'N/A') }}</span>
+                      <span class="text-[10px] font-bold text-slate-500 uppercase">{{ 
+                        (() => {
+                          const dateVal = inv.invoice_date || inv.created_at
+                          if (!dateVal) return 'N/A'
+                          const d = new Date(dateVal)
+                          if (isNaN(d.getTime())) return 'N/A'
+                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+                        })()
+                      }}</span>
                    </td>
                    <td class="px-8 py-1">
                      <span class="text-[11px] font-black text-slate-900 uppercase truncate block max-w-[150px]">{{ inv.vendor_name || 'Direct Entry' }}</span>

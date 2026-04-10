@@ -16,11 +16,9 @@ const loading = ref(true)
 // Utility: Date Formatting
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '-'
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 // Filter State

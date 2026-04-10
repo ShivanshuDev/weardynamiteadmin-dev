@@ -172,13 +172,16 @@ const totalPages = computed(() => Math.ceil(groupedLedger.value.length / itemsPe
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: '2-digit' }).replace(/ /g, '-')
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return '-'
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 const formatDateNumeric = (dateStr) => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
+  if (isNaN(d.getTime())) return dateStr
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 

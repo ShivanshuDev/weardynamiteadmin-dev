@@ -343,7 +343,10 @@ export const useAdminStore = defineStore('admin', {
         this.orders = data.map(o => ({
           ...o,
           id: o.order_id || o.id,
-          date: new Date(o.created_at || o.date).toLocaleDateString(),
+          date: (() => {
+            const d = new Date(o.created_at || o.date)
+            return isNaN(d.getTime()) ? '-' : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+          })(),
           total: o.total_amount || o.totalUSD || o.total
         }));
       } catch (error) {
@@ -361,7 +364,10 @@ export const useAdminStore = defineStore('admin', {
         const order = {
           ...response.data,
           id: response.data.order_id || response.data.id,
-          date: new Date(response.data.created_at || response.data.date).toLocaleDateString(),
+          date: (() => {
+            const d = new Date(response.data.created_at || response.data.date)
+            return isNaN(d.getTime()) ? '-' : `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
+          })(),
           total: response.data.total_amount || response.data.total
         };
         return order;

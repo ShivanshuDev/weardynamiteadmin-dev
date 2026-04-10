@@ -193,7 +193,7 @@ const viewOrderFromCustomer = (order) => {
 
 // Pagination
 const currentPage = ref(1)
-const itemsPerPage = 8
+const itemsPerPage = 12
 
 
 
@@ -399,7 +399,8 @@ const getStatusColor = (status) => {
 const formatDateNumeric = (dateStr) => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
+  if (isNaN(d.getTime())) return '-'
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 const exportOrdersToPDF = () => {

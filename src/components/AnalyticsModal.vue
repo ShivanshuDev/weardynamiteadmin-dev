@@ -130,7 +130,7 @@ const trendChartData = computed(() => {
   const groups = {}
   filteredData.value.forEach(item => {
     const d = parseFlexibleDate(item)
-    const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+    const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
     groups[label] = (groups[label] || 0) + (props.type === 'inventory' ? (item.stock || 0) : 1)
   })
 

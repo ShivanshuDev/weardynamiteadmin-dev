@@ -37,11 +37,7 @@ const formatDate = (ts) => {
   if (!ts) return '-'
   const d = new Date(ts)
   if (isNaN(d.getTime())) return '-'
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: '2-digit',
-    year: 'numeric'
-  })
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 // Computed Filtering
@@ -192,6 +188,7 @@ const newProduct = ref({
   seoDescription: '',
   urlHandle: '',
   specs: [],
+  aboutThisItem: [],
   image: '',
   isReturnable: true,
   returnDays: 7,
@@ -300,7 +297,7 @@ const openAddModal = () => {
     mrp: 0, salePrice: 0, purchasePrice: 0, taxPercent: 18, isTaxable: true, discountPercentage: 0, promotionType: 'None', discountCoupon: '',
     sku: '', barcode: '', stock: 0, lowStockAlert: 10,
     primaryColor: '', primarySize: '', fit: '', neckType: '', occasion: '', images: [''], variants: [{ color: '', sizes: [{ size: '', stock: 0 }] }],
-    keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: [], image: '',
+    keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: [], aboutThisItem: [], image: '',
     isReturnable: true, returnDays: 7, codAvailable: false, codCouponApplicable: false,
     isFreshArrival: false, isMostPopular: false
   }
@@ -325,6 +322,7 @@ const openEditModal = (product) => {
 
   if (!p.variants || !p.variants.length) p.variants = [{ color: '', sizes: [{ size: '', stock: 0 }] }]
   if (!p.specs) p.specs = []
+  if (!p.aboutThisItem) p.aboutThisItem = []
   if (!p.keywords) p.keywords = []
   
   newProduct.value = p
@@ -350,6 +348,7 @@ const openViewModal = (product) => {
 
   if (!p.variants || !p.variants.length) p.variants = [{ color: '', sizes: [{ size: '', stock: 0 }] }]
   if (!p.specs) p.specs = []
+  if (!p.aboutThisItem) p.aboutThisItem = []
   if (!p.keywords) p.keywords = []
 
   newProduct.value = p
@@ -506,7 +505,7 @@ const formatDateNumeric = (dateStr) => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   if (isNaN(d.getTime())) return dateStr
-  return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
 }
 
 const exportProductsToPDF = async () => {
@@ -1605,6 +1604,28 @@ onMounted(() => {
                       <div>
                          <h4 class="text-xs font-black uppercase text-blue-900">Pro Tip</h4>
                          <p class="text-xs text-blue-700 mt-1 leading-relaxed">Adding technical specifications like GSM, weave pattern, or washing instructions helps increase customer trust and reduces return rates by up to 24%.</p>
+                      </div>
+                   </div>
+                   </div>
+                   
+                   <div class="mt-10 pt-10 border-t border-slate-100">
+                      <div class="flex items-center justify-between mb-6">
+                         <div>
+                            <h3 class="text-sm font-black uppercase tracking-widest text-slate-700">About this Item</h3>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">Add bullet points of features</p>
+                         </div>
+                         <button @click="newProduct.aboutThisItem.push('')" :disabled="modalMode === 'view'" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-900/10 disabled:opacity-70 disabled:cursor-not-allowed">
+                            <Plus size="14"/> Add Bullet
+                         </button>
+                      </div>
+                      <div class="space-y-4">
+                          <div v-for="(bullet, bIdx) in newProduct.aboutThisItem" :key="'bullet-'+bIdx" class="flex items-center gap-4 group">
+                             <div class="w-2 h-2 rounded-full bg-slate-300"></div>
+                             <input v-model="newProduct.aboutThisItem[bIdx]" :disabled="modalMode === 'view'" placeholder="e.g. Machine wash cold" class="flex-1 p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                             <button v-if="modalMode !== 'view'" @click="newProduct.aboutThisItem.splice(bIdx, 1)" class="p-2 text-slate-200 hover:text-red-500 transition-colors">
+                                <X size="18" />
+                             </button>
+                          </div>
                       </div>
                    </div>
                 </div>
