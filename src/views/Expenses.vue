@@ -209,7 +209,7 @@ const formatDate = (dateStr) => {
                 </div>
                 <div class="flex flex-col gap-1.5">
                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Total Amount (₹)</label>
-                   <input v-model.number="newExpense.amount" type="number" class="bg-slate-50 border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-bold font-mono outline-none focus:border-red-600 transition-all" placeholder="0.00" />
+                   <input v-model.number="newExpense.amount" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="bg-slate-50 border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-bold font-mono outline-none focus:border-red-600 transition-all" placeholder="0.00" />
                 </div>
              </div>
 

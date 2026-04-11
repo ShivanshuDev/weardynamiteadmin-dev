@@ -14,7 +14,13 @@ const loading = ref(false)
 const error = ref('')
 
 const handleLogin = async () => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!email.value || !password.value) return
+  
+  if (!emailRegex.test(email.value)) {
+    error.value = 'Invalid administrative identity format.'
+    return
+  }
   
   loading.value = true
   error.value = ''

@@ -72,7 +72,20 @@ const exportAccountStatement = () => {
 }
 
 const handleAddVendor = async () => {
-  if (!newVendor.value.name || !newVendor.value.email) return
+  // Field Validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const phoneRegex = /^\d{10}$/
+
+  if (!newVendor.value.name) {
+    return adminStore.showNotification('Validation Error', 'Legal Entity Name is required.', 'warning')
+  }
+  if (!newVendor.value.email || !emailRegex.test(newVendor.value.email)) {
+    return adminStore.showNotification('Validation Error', 'Please provide a valid email address.', 'warning')
+  }
+  if (!newVendor.value.contact || !phoneRegex.test(newVendor.value.contact.replace(/\s+/g, '').replace(/^\+91/, ''))) {
+    return adminStore.showNotification('Validation Error', 'Primary Contact must be exactly 10 digits.', 'warning')
+  }
+
   const vendor = await adminStore.registerVendor({ ...newVendor.value })
   showAddModal.value = false
   newVendor.value = {
@@ -194,6 +207,8 @@ onMounted(async () => {
                    <span class="text-[9px] font-black text-slate-400 italic">₹</span>
                    <input 
                      type="number" 
+                     min="0"
+                     @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()"
                      placeholder="Send Payment" 
                      class="bg-transparent w-full text-[11px] font-black outline-none placeholder:text-slate-400"
                      @keyup.enter="e => { if(e.target.value > 0) { handleSettlement(vendor.id, Number(e.target.value)); e.target.value = '' } }"
@@ -309,7 +324,7 @@ onMounted(async () => {
                <div class="grid grid-cols-2 gap-6 p-6 bg-slate-50/50 rounded-3xl border border-slate-100 border-dashed">
                   <div class="flex flex-col gap-1.5">
                      <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Opening Amount (₹)</label>
-                     <input v-model.number="newVendor.initialBalance" type="number" class="bg-white border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-black outline-none focus:border-blue-600 transition-all font-mono" placeholder="0.00" />
+                     <input v-model.number="newVendor.initialBalance" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="bg-white border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-black outline-none focus:border-blue-600 transition-all font-mono" placeholder="0.00" />
                   </div>
                   <div class="flex flex-col gap-1.5">
                      <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Balance Status</label>

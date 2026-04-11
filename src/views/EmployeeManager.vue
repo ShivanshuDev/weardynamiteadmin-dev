@@ -99,6 +99,20 @@ const openHistoryModal = (emp) => {
 }
 
 const saveEmployee = () => {
+  // Field Validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const phoneRegex = /^\d{10}$/
+
+  if (!newEmployee.value.name) {
+    return adminStore.showNotification('Validation Error', 'Employee name is required.', 'warning')
+  }
+  if (!newEmployee.value.email || !emailRegex.test(newEmployee.value.email)) {
+    return adminStore.showNotification('Validation Error', 'Valid official email is required.', 'warning')
+  }
+  if (!newEmployee.value.phone || !phoneRegex.test(newEmployee.value.phone.replace(/\s+/g, '').replace(/^\+91/, ''))) {
+    return adminStore.showNotification('Validation Error', 'Contact number must be exactly 10 digits.', 'warning')
+  }
+
   if (modalMode.value === 'add') {
     adminStore.addEmployee(newEmployee.value)
   } else {

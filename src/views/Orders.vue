@@ -152,7 +152,20 @@ watch(() => [newOrderData.value.subtotal, newOrderData.value.tax], ([sub, tax]) 
 })
 
 const handleCreateManualOrder = () => {
-  if (!newOrderData.value.customerName || !newOrderData.value.customerEmail) return
+  // Field Validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  const phoneRegex = /^\d{10}$/
+
+  if (!newOrderData.value.customerName) {
+    return adminStore.showNotification('Validation Error', 'Customer name is required.', 'warning')
+  }
+  if (!newOrderData.value.customerEmail || !emailRegex.test(newOrderData.value.customerEmail)) {
+    return adminStore.showNotification('Validation Error', 'Valid customer email is required.', 'warning')
+  }
+  if (!newOrderData.value.customerPhone || !phoneRegex.test(newOrderData.value.customerPhone.replace(/\s+/g, '').replace(/^\+91/, ''))) {
+    return adminStore.showNotification('Validation Error', 'Customer phone must be exactly 10 digits.', 'warning')
+  }
+
   adminStore.createManualOrder(newOrderData.value)
   showManualOrderModal.value = false
   // Reset
@@ -1253,16 +1266,16 @@ const exportOrdersToExcel = () => {
                                </div>
                             </td>
                             <td class="py-3">
-                               <input v-model.number="item.quantity" type="number" min="1" class="w-full bg-white border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center shadow-sm" />
+                               <input v-model.number="item.quantity" type="number" min="1" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full bg-white border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center shadow-sm" />
                             </td>
                             <td class="py-3">
-                               <input v-model.number="item.price" type="number" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center cursor-not-allowed opacity-70" />
+                               <input v-model.number="item.price" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center cursor-not-allowed opacity-70" />
                             </td>
                             <td class="py-3">
-                               <input v-model.number="item.discount" type="number" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center text-red-500 cursor-not-allowed opacity-70" placeholder="0" />
+                               <input v-model.number="item.discount" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center text-red-500 cursor-not-allowed opacity-70" placeholder="0" />
                             </td>
                             <td class="py-3">
-                               <input v-model.number="item.taxRate" type="number" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center text-blue-600 cursor-not-allowed opacity-70" placeholder="18" />
+                               <input v-model.number="item.taxRate" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" readonly class="w-full bg-slate-100 border border-slate-100 px-2 py-2 rounded-lg text-[10px] font-black outline-none font-mono text-center text-blue-600 cursor-not-allowed opacity-70" placeholder="18" />
                             </td>
                             <td class="py-3 text-right pr-4">
                                <p class="text-[10px] font-black text-slate-900">₹{{ ((item.price - (item.discount || 0)) * item.quantity).toLocaleString() }}</p>
@@ -1322,7 +1335,7 @@ const exportOrdersToExcel = () => {
                    </div>
                    <div class="space-y-2">
                       <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Net Summary (Excl. Tax)</label>
-                      <input v-model.number="newOrderData.subtotal" type="number" readonly class="w-full bg-slate-100 border border-slate-100 px-6 py-3.5 rounded-2xl text-[12px] font-black outline-none font-mono cursor-not-allowed opacity-70" />
+                      <input v-model.number="newOrderData.subtotal" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" readonly class="w-full bg-slate-100 border border-slate-100 px-6 py-3.5 rounded-2xl text-[12px] font-black outline-none font-mono cursor-not-allowed opacity-70" />
                    </div>
                 </div>
 

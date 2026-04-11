@@ -596,7 +596,7 @@ const exportToPDF = () => {
                 </div>
                 <div class="flex flex-col gap-1.5">
                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Amount (₹)</label>
-                   <input v-model.number="newEntry.amount" type="number" class="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-bold font-mono outline-none focus:border-indigo-600 transition-all" />
+                   <input v-model.number="newEntry.amount" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-bold font-mono outline-none focus:border-indigo-600 transition-all" />
                 </div>
              </div>
           </div>

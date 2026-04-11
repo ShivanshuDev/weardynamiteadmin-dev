@@ -1224,14 +1224,14 @@ onMounted(() => {
                          <label class="text-[10px] font-black uppercase text-slate-400">MRP (₹)</label>
                          <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 font-bold">₹</span>
-                            <input v-model="newProduct.mrp" type="number" class="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
+                            <input v-model="newProduct.mrp" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full pl-10 pr-4 py-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all shadow-sm" />
                          </div>
                       </div>
                       <div class="space-y-2 text-blue-600">
                          <label class="text-[10px] font-black uppercase text-blue-400">Sale Price (₹)</label>
                          <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-blue-300 font-bold">₹</span>
-                            <input v-model="newProduct.salePrice" type="number" class="w-full pl-10 pr-4 py-4 bg-blue-50/50 rounded-xl border border-blue-100 focus:border-blue-600 outline-none font-bold text-sm transition-all shadow-sm" />
+                            <input v-model="newProduct.salePrice" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full pl-10 pr-4 py-4 bg-blue-50/50 rounded-xl border border-blue-100 focus:border-blue-600 outline-none font-bold text-sm transition-all shadow-sm" />
                          </div>
                       </div>
                     </div>
@@ -1246,14 +1246,14 @@ onMounted(() => {
                       </div>
                       <div class="space-y-2" v-if="newProduct.isTaxable">
                          <label class="text-[10px] font-black uppercase text-slate-400">Tax Percent (%)</label>
-                         <input v-model="newProduct.taxPercent" :disabled="modalMode === 'view'" type="number" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all" />
+                         <input v-model="newProduct.taxPercent" :disabled="modalMode === 'view'" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all" />
                       </div>
                     </div>
 
                     <div class="grid grid-cols-2 gap-8 pt-4 border-t border-slate-100">
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-orange-400">Discount (%)</label>
-                         <input v-model="newProduct.discountPercentage" :disabled="modalMode === 'view'" type="number" placeholder="0" class="w-full p-4 bg-orange-50/30 rounded-xl border border-transparent focus:border-orange-500 outline-none font-bold text-sm transition-all" />
+                         <input v-model="newProduct.discountPercentage" :disabled="modalMode === 'view'" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" placeholder="0" class="w-full p-4 bg-orange-50/30 rounded-xl border border-transparent focus:border-orange-500 outline-none font-bold text-sm transition-all" />
                       </div>
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Promotion Type</label>
@@ -1333,7 +1333,7 @@ onMounted(() => {
                                     <div class="relative">
                                        <input 
                                           v-model="newProduct.returnDays" 
-                                          type="number" 
+                                          type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()"
                                           class="w-full p-3 bg-slate-50 rounded-xl border border-transparent focus:border-blue-500 outline-none font-black text-sm transition-all"
                                           placeholder="7"
                                        />
@@ -1380,11 +1380,11 @@ onMounted(() => {
                    <div class="grid grid-cols-2 gap-8">
                       <div class="space-y-2">
                          <label class="text-[10px] font-black uppercase text-slate-400">Total Stock</label>
-                         <input v-model="newProduct.stock" :disabled="modalMode === 'view'" type="number" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                         <input v-model="newProduct.stock" :disabled="modalMode === 'view'" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full p-4 bg-slate-50 rounded-xl border border-transparent focus:border-black outline-none font-bold text-sm transition-all disabled:opacity-70" />
                       </div>
                       <div class="space-y-2 text-orange-600">
                          <label class="text-[10px] font-black uppercase text-orange-400">Low Stock Threshold</label>
-                         <input v-model="newProduct.lowStockAlert" :disabled="modalMode === 'view'" type="number" class="w-full p-4 bg-orange-50/50 rounded-xl border border-orange-100 focus:border-orange-600 outline-none font-bold text-sm transition-all disabled:opacity-70" />
+                         <input v-model="newProduct.lowStockAlert" :disabled="modalMode === 'view'" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full p-4 bg-orange-50/50 rounded-xl border border-orange-100 focus:border-orange-600 outline-none font-bold text-sm transition-all disabled:opacity-70" />
                       </div>
                    </div>
                 </div>
@@ -1437,7 +1437,7 @@ onMounted(() => {
                                </div>
                                <div class="col-span-4 space-y-1">
                                   <label class="text-[8px] font-black uppercase text-slate-400">Stock Quantity</label>
-                                  <input v-model="s.stock" :disabled="modalMode === 'view'" type="number" class="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none font-bold text-xs disabled:opacity-70" />
+                                  <input v-model="s.stock" :disabled="modalMode === 'view'" type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()" class="w-full p-3 bg-white border border-slate-100 rounded-xl outline-none font-bold text-xs disabled:opacity-70" />
                                </div>
                                <div class="col-span-3 pb-0.5">
                                   <div class="flex items-center gap-2">

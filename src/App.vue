@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import AdminSidebar from './components/AdminSidebar.vue'
 import ImagePreviewModal from './components/ImagePreviewModal.vue'
 import GlobalLoader from './components/GlobalLoader.vue'
@@ -9,6 +9,21 @@ import { Menu } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
 const isAuthenticated = computed(() => authStore.isAuthenticated)
+
+// Global handling to prevent arrow keys from changing numeric input values
+const handleGlobalKeydown = (e) => {
+  if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.type === 'number') {
+    e.preventDefault()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 </script>
 
 <template>
