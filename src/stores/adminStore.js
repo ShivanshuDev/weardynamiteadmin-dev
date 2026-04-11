@@ -620,6 +620,12 @@ export const useAdminStore = defineStore('admin', {
       try {
         const response = await api.post('/admin/vendors', vendor);
         this.vendors.unshift(response.data);
+        // Refresh financial snapshots if initial balance was provided
+        if (vendor.initialBalance > 0) {
+          this.fetchLedger();
+          this.fetchVendorHistory(response.data.vendorId);
+          this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        }
         return response.data;
       } catch (error) {
         console.error('Failed to register vendor:', error);
@@ -641,14 +647,32 @@ export const useAdminStore = defineStore('admin', {
           date: Date.now(),
           type: 'Payment',
           amount,
-          description: note || 'Account Settlement'
+          description: note || 'Institutional Account Settlement'
         });
         this.vendorTransactions.unshift(response.data);
-        this.fetchExpenses();
         this.fetchLedger();
         this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        this.fetchDashboardStats();
       } catch (error) {
         console.error('Failed settlement:', error);
+        throw error;
+      }
+    },
+    async addVendorBill(vendorId, amount, description) {
+      try {
+        const response = await api.post(`/admin/vendors/${vendorId}/transactions`, {
+          date: Date.now(),
+          type: 'Bill',
+          amount,
+          description
+        });
+        this.vendorTransactions.unshift(response.data);
+        this.fetchLedger();
+        this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        this.fetchDashboardStats();
+        return response.data;
+      } catch (error) {
+        console.error('Failed to record bill:', error);
         throw error;
       }
     },

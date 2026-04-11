@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
 import { 
   Building2, 
@@ -14,8 +14,6 @@ import {
   Clock,
   LayoutGrid,
   List,
-  Eye,
-  FileText,
   History,
   TrendingDown,
   TrendingUp,
@@ -25,15 +23,10 @@ import {
 const adminStore = useAdminStore()
 const showAddModal = ref(false)
 const showAccountModal = ref(false)
-const showBillModal = ref(false)
+
 const selectedVendor = ref(null)
 const searchQuery = ref('')
 const viewMode = ref('card') // 'card' or 'table'
-
-const newBill = ref({
-  amount: 0,
-  description: ''
-})
 
 const categories = ['Fabric', 'Accessories', 'Packaging', 'Logistics', 'Marketing', 'Technology']
 
@@ -42,6 +35,8 @@ const newVendor = ref({
   category: 'Fabric',
   contact: '',
   email: '',
+  initialBalance: 0,
+  initialBalanceType: 'Payment', // Always Debit
   bankDetails: {
     account: '',
     ifsc: '',
@@ -67,18 +62,6 @@ const openAccount = (vendor) => {
   showAccountModal.value = true
 }
 
-const openBillModal = (vendor) => {
-  selectedVendor.value = vendor
-  showBillModal.value = true
-}
-
-const handleAddBill = () => {
-  if (newBill.value.amount <= 0 || !selectedVendor.value) return
-  adminStore.addVendorBill(selectedVendor.value.id, newBill.value.amount, newBill.value.description)
-  showBillModal.value = false
-  newBill.value = { amount: 0, description: '' }
-}
-
 const handleSettlement = (vendorId, amount) => {
   if (amount <= 0) return
   adminStore.payVendorSettlement(vendorId, amount)
@@ -88,17 +71,28 @@ const exportAccountStatement = () => {
   adminStore.showNotification('Report Generation', 'Institutional Report Generation: The Statement of Account for ' + selectedVendor.value.name + ' is being compiled for export.', 'info')
 }
 
-const handleAddVendor = () => {
-  adminStore.registerVendor({ ...newVendor.value })
+const handleAddVendor = async () => {
+  if (!newVendor.value.name || !newVendor.value.email) return
+  const vendor = await adminStore.registerVendor({ ...newVendor.value })
   showAddModal.value = false
   newVendor.value = {
     name: '',
     category: 'Fabric',
     contact: '',
     email: '',
+    initialBalance: 0,
+    initialBalanceType: 'Payment',
     bankDetails: { account: '', ifsc: '', bank: '' }
   }
 }
+
+onMounted(async () => {
+  await adminStore.fetchVendors()
+  // Fetch history for all vendors to ensure balance calculations are accurate
+  for (const v of adminStore.vendors) {
+     adminStore.fetchVendorHistory(v.id)
+  }
+})
 </script>
 
 <template>
@@ -157,11 +151,10 @@ const handleAddVendor = () => {
        <div 
          v-for="vendor in filteredVendors" 
          :key="vendor.id"
-         class="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
+         class="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group relative overflow-hidden"
        >
           <div class="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-all flex gap-2">
-             <button @click="openAccount(vendor)" class="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm" title="Statement of Account"><History size="18" /></button>
-             <button @click="openBillModal(vendor)" class="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-600 hover:text-white transition-all shadow-sm" title="Record Invoice/Bill"><FileText size="18" /></button>
+             <button @click="openAccount(vendor)" class="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-black hover:text-white transition-all shadow-sm" title="Statement of Account"><History size="18" /></button>
           </div>
 
           <div class="flex items-start gap-5">
@@ -185,12 +178,14 @@ const handleAddVendor = () => {
              </div>
           </div>
 
-          <div class="mt-8 space-y-4">
-             <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
-                <Mail size="14" class="text-slate-300" /> {{ vendor.email }}
-             </div>
-             <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
-                <Phone size="14" class="text-slate-300" /> {{ vendor.contact }}
+          <div class="mt-6 space-y-3">
+             <div class="flex items-center gap-4 text-[10px] font-bold text-slate-500 whitespace-nowrap overflow-hidden">
+                <div class="flex items-center gap-2 max-w-[55%] truncate">
+                   <Mail size="12" class="text-slate-300 shrink-0" /> {{ vendor.email }}
+                </div>
+                <div class="flex items-center gap-2">
+                   <Phone size="12" class="text-slate-300 shrink-0" /> {{ vendor.contact }}
+                </div>
              </div>
              
              <!-- Dynamic Settlement Input -->
@@ -199,8 +194,8 @@ const handleAddVendor = () => {
                    <span class="text-[9px] font-black text-slate-400 italic">₹</span>
                    <input 
                      type="number" 
-                     placeholder="Settle Amount" 
-                     class="bg-transparent w-full text-[11px] font-black outline-none placeholder:text-slate-300"
+                     placeholder="Send Payment" 
+                     class="bg-transparent w-full text-[11px] font-black outline-none placeholder:text-slate-400"
                      @keyup.enter="e => { if(e.target.value > 0) { handleSettlement(vendor.id, Number(e.target.value)); e.target.value = '' } }"
                    />
                 </div>
@@ -237,9 +232,8 @@ const handleAddVendor = () => {
              <thead class="bg-slate-50/50">
                 <tr>
                    <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Partner Identity</th>
-                   <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest">Category</th>
+                   <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Category</th>
                    <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Contact Matrix</th>
-                   <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-right">Outstanding</th>
                    <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">Bank Mapping</th>
                    <th class="px-8 py-5 text-[9px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
                 </tr>
@@ -255,33 +249,24 @@ const handleAddVendor = () => {
                          </div>
                       </div>
                    </td>
-                   <td class="px-8 py-4">
-                      <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{{ vendor.category }}</span>
-                   </td>
-                   <td class="px-8 py-4 text-center">
-                      <div class="flex flex-col gap-0.5">
-                         <span class="text-[10px] font-bold text-slate-800">{{ vendor.email }}</span>
-                         <span class="text-[10px] font-black text-blue-600">{{ vendor.contact }}</span>
-                      </div>
-                   </td>
-                   <td class="px-8 py-4 text-right">
-                      <span 
-                        class="text-xs font-black italic tracking-tighter"
-                        :class="vendor.balance > 0 ? 'text-red-600' : 'text-emerald-600'"
-                      >
-                         ₹{{ vendor.balance.toLocaleString() }}
-                      </span>
-                   </td>
-                   <td class="px-8 py-4 text-center">
-                      <span class="text-[10px] font-black uppercase text-slate-900 border-b border-slate-100">{{ vendor.bankDetails?.bank }}</span>
-                   </td>
-                   <td class="px-8 py-4 text-right">
-                      <div class="flex items-center justify-end gap-3 translate-x-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
-                         <button @click="openAccount(vendor)" class="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="View History"><History size="16"/></button>
-                         <button @click="openBillModal(vendor)" class="bg-amber-50 text-amber-600 p-2 rounded-xl hover:bg-amber-600 hover:text-white transition-all" title="Add Bill"><FileText size="16"/></button>
-                         <button class="bg-slate-50 text-slate-400 p-2 rounded-xl hover:bg-black hover:text-white transition-all"><MoreVertical size="16"/></button>
-                      </div>
-                   </td>
+                   <td class="px-8 py-3 text-center">
+                       <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{{ vendor.category }}</span>
+                    </td>
+                    <td class="px-8 py-3 text-center">
+                       <div class="flex flex-col gap-0.5">
+                          <span class="text-[10px] font-bold text-slate-800">{{ vendor.email }}</span>
+                          <span class="text-[10px] font-black text-blue-600">{{ vendor.contact }}</span>
+                       </div>
+                    </td>
+                    <td class="px-8 py-3 text-center">
+                       <span class="text-[10px] font-black uppercase text-slate-900 border-b border-slate-100">{{ vendor.bankDetails?.bank }}</span>
+                    </td>
+                    <td class="px-8 py-3 text-right">
+                       <div class="flex items-center justify-end gap-3 translate-x-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all">
+                          <button @click="openAccount(vendor)" class="bg-blue-50 text-blue-600 p-2 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="View History"><History size="16"/></button>
+                          <button class="bg-slate-50 text-slate-400 p-2 rounded-xl hover:bg-black hover:text-white transition-all"><MoreVertical size="16"/></button>
+                       </div>
+                    </td>
                 </tr>
              </tbody>
           </table>
@@ -317,6 +302,22 @@ const handleAddVendor = () => {
                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Email Address</label>
                    <input v-model="newVendor.email" type="email" class="bg-slate-50 border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-bold outline-none focus:border-blue-600 transition-all" placeholder="partner@example.com" />
                 </div>
+             </div>
+
+             <div class="pt-6 border-t border-slate-50">
+               <h4 class="text-[10px] font-black uppercase text-blue-600 tracking-widest mb-6 flex items-center gap-2"><History size="14"/> Opening Financial State</h4>
+               <div class="grid grid-cols-2 gap-6 p-6 bg-slate-50/50 rounded-3xl border border-slate-100 border-dashed">
+                  <div class="flex flex-col gap-1.5">
+                     <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Opening Amount (₹)</label>
+                     <input v-model.number="newVendor.initialBalance" type="number" class="bg-white border border-slate-100 px-6 py-3.5 rounded-2xl text-xs font-black outline-none focus:border-blue-600 transition-all font-mono" placeholder="0.00" />
+                  </div>
+                  <div class="flex flex-col gap-1.5">
+                     <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Balance Status</label>
+                     <div class="flex items-center p-4 bg-white rounded-2xl border border-slate-100 h-full">
+                        <span class="text-[10px] font-black uppercase text-blue-600 tracking-widest italic">Funds Dispatched (Debit)</span>
+                     </div>
+                  </div>
+               </div>
              </div>
 
              <div class="pt-6 border-t border-slate-50">
@@ -368,14 +369,14 @@ const handleAddVendor = () => {
           <!-- Account Summary Cards -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 bg-slate-50/50">
              <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Total Liability (Bills)</p>
+                <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Initial Credit/Opening</p>
                 <div class="flex items-center justify-between mt-1">
-                   <h3 class="text-xl font-black text-slate-900 italic">₹{{ adminStore.getVendorHistory(selectedVendor?.id).filter(t => t.type === 'Bill').reduce((sum, t) => sum + t.amount, 0).toLocaleString() }}</h3>
+                   <h3 class="text-xl font-black text-slate-900 italic">₹{{ Number(selectedVendor?.initialBalance || 0).toLocaleString() }}</h3>
                    <div class="bg-amber-50 text-amber-600 p-2 rounded-lg"><TrendingUp size="16"/></div>
                 </div>
              </div>
              <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Total Settled (Paid)</p>
+                <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Total Payments Sent</p>
                 <div class="flex items-center justify-between mt-1">
                    <h3 class="text-xl font-black text-slate-900 italic">₹{{ adminStore.getVendorHistory(selectedVendor?.id).filter(t => t.type === 'Payment').reduce((sum, t) => sum + t.amount, 0).toLocaleString() }}</h3>
                    <div class="bg-emerald-50 text-emerald-600 p-2 rounded-lg"><TrendingDown size="16"/></div>
@@ -391,41 +392,45 @@ const handleAddVendor = () => {
           <div class="flex-1 overflow-y-auto p-8 pt-0 custom-scrollbar">
              <div class="sticky top-0 bg-white py-4 z-10 border-b border-slate-50 flex items-center justify-between mb-4">
                 <h4 class="text-[10px] font-black uppercase text-slate-900 tracking-[0.2em] flex items-center gap-2"><History size="14" class="text-blue-600"/> Transaction History</h4>
-                <button @click="openBillModal(selectedVendor)" class="text-[10px] font-black uppercase text-blue-600 hover:underline">+ Record New Bill</button>
              </div>
-
-             <table class="w-full text-left">
-                <thead>
-                   <tr class="bg-slate-50/50">
-                      <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400">Date</th>
-                      <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400">Transaction Details</th>
-                      <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400 text-center">Nature</th>
-                      <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Amount</th>
-                   </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-50">
-                   <tr v-for="tx in adminStore.getVendorHistory(selectedVendor?.id)" :key="tx.id" class="hover:bg-slate-50/50 transition-colors">
-                      <td class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{{ tx.date }}</td>
-                      <td class="px-6 py-4">
-                         <p class="text-sm font-black text-slate-900 italic uppercase tracking-tighter">{{ tx.description }}</p>
-                         <p class="text-[10px] font-bold text-slate-400 font-mono">{{ tx.id }}</p>
-                      </td>
-                      <td class="px-6 py-4 text-center">
-                         <span 
-                          class="text-[9px] font-black uppercase px-3 py-1 rounded-full border"
-                          :class="tx.type === 'Bill' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'"
-                         >
-                          {{ tx.type }}
-                         </span>
-                      </td>
-                      <td class="px-6 py-4 text-right">
-                         <span class="text-sm font-black italic tracking-tighter" :class="tx.type === 'Bill' ? 'text-slate-900' : 'text-blue-600'">
-                           {{ tx.type === 'Payment' ? '-' : '+' }}₹{{ tx.amount.toLocaleString() }}
-                         </span>
-                      </td>
-                   </tr>
-                </tbody>
-             </table>
+             <div class="max-h-[380px] overflow-y-auto no-scrollbar border border-slate-50 rounded-2xl">
+                <table class="w-full text-left">
+                   <thead class="bg-slate-50/50 sticky top-0 z-10">
+                      <tr>
+                         <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400">S.No</th>
+                         <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400">Date</th>
+                         <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400">Transaction Details</th>
+                         <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400 text-center">Nature</th>
+                         <th class="px-6 py-4 text-[9px] font-black uppercase text-slate-400 text-right">Amount</th>
+                      </tr>
+                   </thead>
+                   <tbody class="divide-y divide-slate-50">
+                      <tr v-for="(tx, idx) in adminStore.getVendorHistory(selectedVendor?.id)" :key="tx.id" class="hover:bg-slate-50/50 transition-colors">
+                         <td class="px-6 py-3 text-[11px] font-black text-slate-900">#{{ idx + 1 }}</td>
+                         <td class="px-6 py-3 text-[11px] font-bold text-slate-900 uppercase tracking-tighter">
+                            {{ new Date(tx.date).toLocaleDateString('en-GB') }}
+                         </td>
+                         <td class="px-6 py-3">
+                            <p class="text-[11px] font-black text-slate-900 italic uppercase tracking-tighter">{{ tx.description }}</p>
+                            <p class="text-[9px] font-medium text-slate-400 font-mono">{{ tx.id }}</p>
+                         </td>
+                         <td class="px-6 py-3 text-center">
+                            <span 
+                             class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border"
+                             :class="(tx.type === 'Bill' || tx.type === 'CREDIT') ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'"
+                            >
+                             {{ tx.type }}
+                            </span>
+                         </td>
+                         <td class="px-6 py-3 text-right">
+                            <span class="text-[11px] font-black italic tracking-tighter" :class="(tx.type === 'Bill' || tx.type === 'CREDIT') ? 'text-slate-900' : 'text-blue-600'">
+                              {{ (tx.type === 'Payment' || tx.type === 'DEBIT') ? '-' : '+' }}₹{{ tx.amount.toLocaleString() }}
+                            </span>
+                         </td>
+                      </tr>
+                   </tbody>
+                </table>
+             </div>
           </div>
 
           <!-- Footer Actions -->
@@ -437,45 +442,6 @@ const handleAddVendor = () => {
                  <button @click="showAccountModal = false" class="px-8 py-3 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all italic">Dismiss Account</button>
                  <button @click="exportAccountStatement" class="px-8 py-3 bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-black/10">Export Statement</button>
               </div>
-          </div>
-       </div>
-    </div>
-
-    <!-- Record Bill Modal -->
-    <div v-if="showBillModal" class="fixed inset-0 z-[120] flex items-center justify-center p-6">
-       <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md" @click="showBillModal = false"></div>
-       <div class="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in duration-300">
-          <div class="p-6 border-b border-slate-50 flex items-center justify-between bg-amber-50/30">
-             <div class="flex items-center gap-4">
-                <div class="bg-amber-500 text-white p-3 rounded-xl"><FileText size="20"/></div>
-                <h2 class="text-lg font-black italic uppercase text-slate-900">Record Partner Bill</h2>
-             </div>
-             <button @click="showBillModal = false" class="text-slate-400 hover:text-black transition-colors"><X size="24"/></button>
-          </div>
-          
-          <div class="p-8 space-y-6">
-             <div class="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-4">
-                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center font-black text-slate-400 border border-slate-100">{{ selectedVendor?.name.charAt(0) }}</div>
-                <div>
-                  <p class="text-[9px] font-black uppercase text-slate-400 tracking-widest">Creditor Entity</p>
-                  <p class="text-sm font-black italic text-slate-900 uppercase">{{ selectedVendor?.name }}</p>
-                </div>
-             </div>
-
-             <div class="flex flex-col gap-1.5">
-                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Bill Description</label>
-                <input v-model="newBill.description" type="text" class="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-bold outline-none focus:border-amber-600 transition-all" placeholder="e.g. Fabric Supply - Batch #99" />
-             </div>
-
-             <div class="flex flex-col gap-1.5">
-                <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest pl-1">Invoiced Amount (₹)</label>
-                <input v-model.number="newBill.amount" type="number" class="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-sm font-black font-mono outline-none focus:border-amber-600 transition-all" placeholder="0.00" />
-             </div>
-          </div>
-
-          <div class="p-8 bg-slate-50/50 border-t border-slate-100 flex gap-4">
-             <button @click="showBillModal = false" class="flex-1 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-all italic underline">Discard</button>
-             <button @click="handleAddBill" class="flex-[2] bg-amber-600 text-white px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-amber-500/20 active:scale-95">Verify & Record Liability</button>
           </div>
        </div>
     </div>
