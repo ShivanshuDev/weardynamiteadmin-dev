@@ -777,7 +777,10 @@ export const useAdminStore = defineStore('admin', {
       this.error = null;
       try {
         const response = await api.get('/admin/employees');
-        this.employees = Array.isArray(response.data) ? response.data : [];
+        this.employees = (Array.isArray(response.data) ? response.data : []).map(e => ({
+          ...e,
+          id: e.id || e.employeeId || e.PK?.split('#')[1]
+        }));
       } catch (error) {
         console.error('Failed to fetch employees:', error);
         this.employees = [];
@@ -790,31 +793,118 @@ export const useAdminStore = defineStore('admin', {
       try {
         const response = await api.post('/admin/employees', employee);
         this.employees.unshift(response.data);
+        this.showNotification('Success', 'Personnel added to workforce.', 'success');
         return response.data;
       } catch (error) {
-        console.error('Failed add employee:', error);
+        this.showNotification('Error', 'Failed to onboard personnel.', 'error');
         throw error;
+      }
+    },
+    async updateEmployee(id, employee) {
+      try {
+        const response = await api.put(`/admin/employees/${id}`, employee);
+        const idx = this.employees.findIndex(e => String(e.id || e.employeeId) === String(id));
+        if (idx !== -1) this.employees[idx] = response.data;
+        this.showNotification('Success', 'Personnel file updated.', 'success');
+        return response.data;
+      } catch (error) {
+        this.showNotification('Error', 'Failed to update personnel file.', 'error');
+        throw error;
+      }
+    },
+    async deleteEmployee(id) {
+      try {
+        await api.delete(`/admin/employees/${id}`);
+        this.employees = this.employees.filter(e => String(e.id || e.employeeId) !== String(id));
+        this.showNotification('Success', 'Personnel removed from active vault.', 'success');
+      } catch (error) {
+        this.showNotification('Error', 'Failed to remove personnel.', 'error');
+        throw error;
+      }
+    },
+    async sendEmployeeWelcome(id) {
+      try {
+        await api.post(`/admin/employees/${id}/send-welcome`);
+        this.showNotification('Success', 'Onboarding dossier sent to personnel.', 'success');
+      } catch (error) {
+        console.error('Welcome Email failure:', error);
+        this.showNotification('Note', 'Personnel onboarded, but email vault is currently busy.', 'warning');
+      }
+    },
+    async fetchAttendanceByDate(date) {
+      try {
+        const response = await api.get('/admin/attendance', { params: { date } });
+        // Update local attendance state for this specific date
+        const incoming = (Array.isArray(response.data) ? response.data : []).map(a => ({
+          ...a,
+          id: a.id || a.PK?.split('#')[2] || a.PK,
+          employeeId: a.employeeId || a.PK?.split('#')[1]
+        }));
+        // Merge: remove old records for this date and add new ones
+        this.attendance = this.attendance.filter(a => a.date !== date).concat(incoming);
+      } catch (error) {
+        console.error('Failed fetch attendance:', error);
+      }
+    },
+    async fetchAttendanceMatrix(year, month) {
+      try {
+        const response = await api.get('/admin/attendance/matrix', { params: { year, month } });
+        const incoming = Array.isArray(response.data) ? response.data : [];
+        // Merge logic based on date range if needed, or just replace for the month
+        this.attendance = this.attendance.filter(a => !a.date.startsWith(`${year}-${month}`)).concat(incoming);
+      } catch (error) {
+        console.error('Failed fetch attendance matrix:', error);
       }
     },
     async markAttendance(data) {
       try {
         const response = await api.post('/admin/attendance', data);
-        const idx = this.attendance.findIndex(a => a.employeeId === data.employeeId && a.date === data.date);
+        const idx = this.attendance.findIndex(a => String(a.employeeId) === String(data.employeeId) && a.date === data.date);
         if (idx !== -1) this.attendance[idx] = response.data;
         else this.attendance.push(response.data);
       } catch (error) {
         console.error('Failed mark attendance:', error);
       }
     },
-    async processPayroll(payrollData) {
+    async fetchEmployeeHistory(employeeId) {
+      try {
+        const response = await api.get(`/admin/attendance/${employeeId}/history`);
+        const history = Array.isArray(response.data) ? response.data : [];
+        // Sync these into the global attendance state
+        this.attendance = this.attendance.filter(a => String(a.employeeId) !== String(employeeId)).concat(history);
+      } catch (error) {
+        console.error('Failed fetch employee history:', error);
+      }
+    },
+    async fetchEmployeeAuditLog(employeeId) {
+      try {
+        const response = await api.get(`/admin/attendance/${employeeId}/audit-log`);
+        this.attendanceAuditLog = Array.isArray(response.data) ? response.data : [];
+      } catch (error) {
+        console.error('Failed fetch audit log:', error);
+      }
+    },
+    async fetchPayroll() {
+      try {
+        const response = await api.get('/admin/payroll');
+        this.payroll = (Array.isArray(response.data) ? response.data : []).map(p => ({
+          ...p,
+          id: p.id || p.payrollId || p.SK?.split('#')[1],
+          employeeId: p.employeeId || p.PK?.split('#')[1]
+        }));
+      } catch (error) {
+        console.error('Failed fetch payroll:', error);
+      }
+    },
+    async disbursePayroll(payrollData) {
       this.loading = true;
       try {
         const response = await api.post('/admin/payroll', payrollData);
         this.payroll.unshift(response.data);
-        this.fetchDailySummary(new Date().toISOString().split('T')[0]);
+        this.showNotification('Success', 'Payroll disbursed and Ledger updated.', 'success');
         return response.data;
       } catch (error) {
-        console.error('Failed payroll:', error);
+        this.showNotification('Error', 'Failed to disburse payroll.', 'error');
         throw error;
       } finally {
         this.loading = false;
