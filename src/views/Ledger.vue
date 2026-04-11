@@ -421,14 +421,14 @@ const exportToPDF = () => {
           </div>
        </div>
 
-       <div class="bg-[#0f172a] p-4 rounded-2xl shadow-xl flex items-center justify-between group overflow-hidden h-20 relative">
-          <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent"></div>
-          <div class="flex flex-col relative">
-             <p class="text-[8px] font-black uppercase text-slate-500 tracking-widest">Net Settlement</p>
+       <div class="bg-[#0f172a] p-4 rounded-2xl shadow-xl flex items-center justify-between group overflow-hidden h-20 relative border-2 border-indigo-500/30">
+          <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent"></div>
+          <div class="flex flex-col relative z-10">
+             <p class="text-[8px] font-black uppercase text-indigo-300 tracking-widest px-2 py-0.5 bg-indigo-500/10 rounded-full w-fit">Grand Financial Balance</p>
              <h2 class="text-2xl font-black text-white mt-1 italic tracking-tighter">₹{{ stats.balance.toLocaleString() }}</h2>
           </div>
-          <div class="flex items-center gap-1.5 text-indigo-400 font-black text-[9px] uppercase bg-white/5 px-2 py-1 rounded-lg relative">
-             <CheckCircle2 size="12" /> Integrity Verified
+          <div class="flex items-center gap-1.5 text-indigo-400 font-black text-[9px] uppercase bg-white/5 px-2 py-1 rounded-lg relative z-10">
+             <CheckCircle2 size="12" /> Verified
           </div>
        </div>
     </div>

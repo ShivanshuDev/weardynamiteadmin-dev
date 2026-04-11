@@ -1355,7 +1355,6 @@ const exportOrdersToExcel = () => {
           </div>
        </div>
     </div>
-  </div>
 </template>
 
 <style>

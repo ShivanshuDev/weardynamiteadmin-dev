@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
 import { 
   Receipt, 
@@ -10,11 +10,17 @@ import {
   FileText,
   Clock,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-vue-next'
 
 const adminStore = useAdminStore()
 const showAddModal = ref(false)
+
+onMounted(() => {
+  adminStore.fetchExpenses()
+})
 
 // Pagination State
 const itemsPerPage = 8

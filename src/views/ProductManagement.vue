@@ -1021,7 +1021,7 @@ onMounted(() => {
                 </div>
             </div>
         </div>
-      </div>
+     </div>
     </Transition>
 
     <!-- Advanced Add Product Modal -->
@@ -1044,8 +1044,8 @@ onMounted(() => {
                        <p class="text-[10px] font-black uppercase text-slate-400 tracking-widest">Commercial Listing Specification</p>
                        <span v-if="newProduct.status" class="px-2 py-0.5 bg-blue-50 text-blue-600 text-[8px] font-black uppercase rounded-md border border-blue-100 italic">{{ newProduct.status }}</span>
                     </div>
-                </div>
-             </div>
+               </div>
+            </div>
              <button @click="showAddModal = false" class="p-3 hover:bg-slate-100 rounded-full transition-all text-slate-400 hover:text-black">
                 <X size="24" />
              </button>
@@ -1605,10 +1605,9 @@ onMounted(() => {
                          <h4 class="text-xs font-black uppercase text-blue-900">Pro Tip</h4>
                          <p class="text-xs text-blue-700 mt-1 leading-relaxed">Adding technical specifications like GSM, weave pattern, or washing instructions helps increase customer trust and reduces return rates by up to 24%.</p>
                       </div>
-                   </div>
-                   </div>
-                   
-                   <div class="mt-10 pt-10 border-t border-slate-100">
+                    </div>
+                    
+                    <div class="mt-10 pt-10 border-t border-slate-100">
                       <div class="flex items-center justify-between mb-6">
                          <div>
                             <h3 class="text-sm font-black uppercase tracking-widest text-slate-700">About this Item</h3>
@@ -1625,14 +1624,14 @@ onMounted(() => {
                              <button v-if="modalMode !== 'view'" @click="newProduct.aboutThisItem.splice(bIdx, 1)" class="p-2 text-slate-200 hover:text-red-500 transition-colors">
                                 <X size="18" />
                              </button>
-                          </div>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          </div>
+                           </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
+           </div>
 
-          <!-- Immersive eCommerce Preview Layout (View Mode) -->
+           <!-- Immersive eCommerce Preview Layout (View Mode) -->
           <div v-else class="flex-1 overflow-hidden bg-white flex flex-col lg:flex-row">
              <!-- Media Section (Left) -->
              <div class="lg:w-3/5 bg-slate-50 flex flex-col p-6 border-r border-slate-100 overflow-y-auto custom-scrollbar">
@@ -1798,8 +1797,8 @@ onMounted(() => {
                       <p class="text-[8px] font-black uppercase text-slate-400 mb-1 group-hover:text-blue-600 tracking-widest">Logic Tier</p>
                       <p class="text-xs font-black text-slate-900 uppercase italic">{{ (newProduct.status || 'Draft').toUpperCase() }}</p>
                    </div>
-                </div>
-             </div>
+                 </div>
+            </div>
           </div>
 
           <!-- Modal Footer -->
@@ -1817,10 +1816,10 @@ onMounted(() => {
                 </button>
              </div>
           </div>
-       </div>
-    </div>
+        </div>
+     </div>
 
-    <!-- Custom Delete Confirmation Modal (Moved to root for clarity) -->
+     <!-- Custom Delete Confirmation Modal (Moved to root for clarity) -->
     <div v-if="showDeleteConfirm" class="fixed inset-0 z-[9999] flex items-center justify-center p-6">
        <div class="absolute inset-0 bg-slate-900/80 backdrop-blur-md" @click="showDeleteConfirm = false"></div>
        <div class="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">

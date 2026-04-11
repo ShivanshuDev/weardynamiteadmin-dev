@@ -638,13 +638,14 @@ export const useAdminStore = defineStore('admin', {
     async payVendorSettlement(vendorId, amount, note = '') {
       try {
         const response = await api.post(`/admin/vendors/${vendorId}/transactions`, {
-          date: new Date().toISOString().split('T')[0],
+          date: Date.now(),
           type: 'Payment',
           amount,
           description: note || 'Account Settlement'
         });
         this.vendorTransactions.unshift(response.data);
         this.fetchExpenses();
+        this.fetchLedger();
         this.fetchDailySummary(new Date().toISOString().split('T')[0]);
       } catch (error) {
         console.error('Failed settlement:', error);
@@ -655,7 +656,12 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.get('/admin/expenses');
-        this.expenses = Array.isArray(response.data) ? response.data : [];
+        const { data } = response;
+        this.expenses = (Array.isArray(data) ? data : []).map(e => ({
+          ...e,
+          id: e.expenseId || e.id || e.PK?.split('#')[1],
+          amount: Number(e.amount || 0)
+        })).sort((a, b) => (b.date || 0) - (a.date || 0));
       } catch (error) {
         console.error('Failed to fetch expenses:', error);
         this.expenses = [];
@@ -667,9 +673,17 @@ export const useAdminStore = defineStore('admin', {
     async addExpense(expense) {
       try {
         const response = await api.post('/admin/expenses', expense);
-        this.expenses.unshift(response.data);
+        const newRecord = {
+          ...response.data,
+          id: response.data.expenseId || response.data.id || response.data.PK?.split('#')[1],
+          amount: Number(response.data.amount || 0)
+        };
+        this.expenses.unshift(newRecord);
+        // Refresh financial snapshots
+        this.fetchLedger();
         this.fetchDailySummary(new Date().toISOString().split('T')[0]);
-        return response.data;
+        this.fetchDashboardStats();
+        return newRecord;
       } catch (error) {
         console.error('Failed to add expense:', error);
         throw error;
@@ -691,7 +705,12 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.get('/admin/ledger');
-        this.ledger = Array.isArray(response.data) ? response.data : [];
+        const mappedData = (Array.isArray(response.data) ? response.data : []).map(l => ({
+          ...l,
+          amount: Number(l.amount || 0)
+        }));
+        // Explicit Sort: Ensure newest record (highest date timestamp) is first
+        this.ledger = mappedData.sort((a, b) => (b.date || 0) - (a.date || 0));
       } catch (error) {
         console.error('Failed to fetch ledger:', error);
         this.ledger = [];
@@ -702,7 +721,10 @@ export const useAdminStore = defineStore('admin', {
     async addLedgerEntry(entry) {
       this.loading = true;
       try {
-        const response = await api.post('/admin/ledger', entry);
+        const response = await api.post('/admin/ledger', {
+          ...entry,
+          date: entry.date ? new Date(entry.date).getTime() : Date.now()
+        });
         this.ledger.unshift(response.data);
         return response.data;
       } catch (error) {
