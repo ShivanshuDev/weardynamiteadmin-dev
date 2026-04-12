@@ -1,13 +1,58 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
-import { Mail, Trash2, CheckCircle, MessageSquare, Clock, User, X, Phone, Calendar, ChevronRight } from 'lucide-vue-next'
+import { Mail, Trash2, CheckCircle, MessageSquare, Clock, User, X, Phone, Calendar, ChevronRight, Download, FileJson } from 'lucide-vue-next'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+import * as XLSX from 'xlsx'
 
 const adminStore = useAdminStore()
 const showDetails = ref(false)
 const selectedInquiry = ref(null)
+const isSaving = ref(false)
 const currentTab = ref('All')
 const tabs = ['All', 'Active', 'In Progress', 'On Hold', 'Resolved']
+
+const downloadPDF = () => {
+   // Switch to Landscape orientation to fit full message content
+   const doc = new jsPDF('l', 'mm', 'a4')
+   
+   const tableData = filteredInquiries.value.map(i => [
+     i.name || i.fullName,
+     i.email,
+     i.mobile,
+     i.status,
+     i.message, // Removed truncation to show full customer narrative
+     i.date || (i.createdAt ? new Date(i.createdAt).toLocaleDateString() : 'N/A')
+   ])
+
+   doc.text('WearDynamite - Inquiry Report', 14, 15)
+   
+   // Use standalone autoTable function for better compatibility
+   autoTable(doc, {
+     head: [['Name', 'Email', 'Mobile', 'Status', 'Message', 'Date']],
+     body: tableData,
+     startY: 20,
+     theme: 'grid',
+     headStyles: { fillColor: [0, 0, 0] }
+   })
+   
+   doc.save(`Inquiries_${currentTab.value}_${new Date().toLocaleDateString()}.pdf`)
+}
+
+const downloadExcel = () => {
+   const worksheet = XLSX.utils.json_to_sheet(filteredInquiries.value.map(i => ({
+     Name: i.name || i.fullName,
+     Email: i.email,
+     Mobile: i.mobile,
+     Status: i.status,
+     Message: i.message,
+     Date: i.date || (i.createdAt ? new Date(i.createdAt).toLocaleDateString() : 'N/A')
+   })))
+   const workbook = XLSX.utils.book_new()
+   XLSX.utils.book_append_sheet(workbook, worksheet, 'Inquiries')
+   XLSX.writeFile(workbook, `Inquiries_${currentTab.value}_${new Date().toLocaleDateString()}.xlsx`)
+}
 
 const filteredInquiries = computed(() => {
   if (currentTab.value === 'All') return adminStore.inquiries
@@ -20,9 +65,30 @@ const openInquiry = (inquiry) => {
 }
 
 const updateStatus = async (newStatus) => {
-  if (!selectedInquiry.value) return
-  await adminStore.updateInquiryStatus(selectedInquiry.value.id, newStatus)
-  selectedInquiry.value.status = newStatus
+  if (!selectedInquiry.value || isSaving.value) return
+  
+  isSaving.value = true
+  try {
+    const targetId = selectedInquiry.value.id || selectedInquiry.value.inquiryId
+    console.log(`[UI SYNC] Updating status for ${targetId} to ${newStatus}...`)
+    
+    // 1. Wait for actual API resolution
+    await adminStore.updateInquiryStatus(targetId, newStatus)
+    
+    // 2. Synchronize local modal state
+    selectedInquiry.value.status = newStatus
+    
+    // 3. Graceful closure only after absolute success
+    setTimeout(() => {
+      showDetails.value = false
+      selectedInquiry.value = null
+      isSaving.value = false
+    }, 600) // Slightly longer for visual confirmation of the status change
+    
+  } catch (error) {
+    console.error('Workflow interrupted during sync:', error)
+    isSaving.value = false
+  }
 }
 
 onMounted(() => {
@@ -31,7 +97,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-10 relative min-h-screen">
+  <div class="space-y-6 relative min-h-screen">
     <!-- UI Status Overlay -->
     <div v-if="adminStore.error" class="bg-red-50 border border-red-100 p-6 rounded-3xl flex items-center justify-between animate-in fade-in slide-in-from-top-4">
       <div class="flex items-center gap-4">
@@ -46,42 +112,63 @@ onMounted(() => {
         <h1 class="text-3xl font-black tracking-tight text-slate-900 italic uppercase">Inquiry Inbox</h1>
         <p class="text-slate-500 font-bold text-sm uppercase tracking-widest mt-1">Manage Customer Messages & Leads</p>
       </div>
+      <div class="flex gap-4">
+         <button 
+          @click="downloadExcel"
+          class="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+         >
+           <Download size="14"/> Export Excel
+         </button>
+         <button 
+          @click="downloadPDF"
+          class="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg"
+         >
+           <Download size="14"/> Export PDF
+         </button>
+      </div>
     </div>
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-       <div class="bg-white p-8 rounded-[3px] border border-slate-100 flex items-center gap-6 shadow-sm">
-          <div class="bg-blue-50 text-blue-600 p-4 rounded-3xl"><MessageSquare size="24"/></div>
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+       <div class="bg-white p-4 rounded-[3px] border border-slate-100 flex items-center gap-4 shadow-sm">
+          <div class="bg-blue-50 text-blue-600 p-2.5 rounded-xl"><MessageSquare size="20"/></div>
           <div>
-            <p class="text-[10px] font-black uppercase text-slate-400">Total Leads</p>
-            <h3 class="text-2xl font-black">{{ adminStore.inquiries.length }}</h3>
+            <p class="text-[9px] font-black uppercase text-slate-400">Total Leads</p>
+            <h3 class="text-xl font-black">{{ adminStore.inquiries.length }}</h3>
           </div>
        </div>
-       <div class="bg-white p-8 rounded-[3px] border border-slate-100 flex items-center gap-6 shadow-sm">
-          <div class="bg-orange-50 text-orange-600 p-4 rounded-3xl"><Clock size="24"/></div>
+       <div class="bg-white p-4 rounded-[3px] border border-slate-100 flex items-center gap-4 shadow-sm">
+          <div class="bg-orange-50 text-orange-600 p-2.5 rounded-xl"><Clock size="20"/></div>
           <div>
-            <p class="text-[10px] font-black uppercase text-slate-400">Active Contacts</p>
-            <h3 class="text-2xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'Active').length }}</h3>
+            <p class="text-[9px] font-black uppercase text-slate-400">Active Contacts</p>
+            <h3 class="text-xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'Active').length }}</h3>
           </div>
        </div>
-       <div class="bg-white p-8 rounded-[3px] border border-slate-100 flex items-center gap-6 shadow-sm">
-          <div class="bg-purple-50 text-purple-600 p-4 rounded-3xl"><Clock size="24"/></div>
+       <div class="bg-white p-4 rounded-[3px] border border-slate-100 flex items-center gap-4 shadow-sm">
+          <div class="bg-purple-50 text-purple-600 p-2.5 rounded-xl"><Clock size="20"/></div>
           <div>
-            <p class="text-[10px] font-black uppercase text-slate-400">In Progress</p>
-            <h3 class="text-2xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'In Progress').length }}</h3>
+            <p class="text-[9px] font-black uppercase text-slate-400">In Progress</p>
+            <h3 class="text-xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'In Progress').length }}</h3>
           </div>
        </div>
-       <div class="bg-white p-8 rounded-[3px] border border-slate-100 flex items-center gap-6 shadow-sm">
-          <div class="bg-emerald-50 text-emerald-600 p-4 rounded-3xl"><CheckCircle size="24"/></div>
+       <div class="bg-white p-4 rounded-[3px] border border-slate-100 flex items-center gap-4 shadow-sm">
+          <div class="bg-amber-50 text-amber-600 p-2.5 rounded-xl"><Clock size="20"/></div>
           <div>
-            <p class="text-[10px] font-black uppercase text-slate-400">Resolved</p>
-            <h3 class="text-2xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'Resolved').length }}</h3>
+            <p class="text-[9px] font-black uppercase text-slate-400">On Hold</p>
+            <h3 class="text-xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'On Hold').length }}</h3>
+          </div>
+       </div>
+       <div class="bg-white p-4 rounded-[3px] border border-slate-100 flex items-center gap-4 shadow-sm">
+          <div class="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl"><CheckCircle size="20"/></div>
+          <div>
+            <p class="text-[9px] font-black uppercase text-slate-400">Resolved</p>
+            <h3 class="text-xl font-black">{{ adminStore.inquiries.filter(i => i.status === 'Resolved').length }}</h3>
           </div>
        </div>
     </div>
 
     <!-- Filter Tabs -->
-    <div class="flex items-center gap-8 border-b border-slate-100 pb-2">
+    <div class="flex items-center gap-8 border-b border-slate-100 mb-0">
        <button 
         v-for="tab in tabs" 
         :key="tab"
@@ -94,8 +181,8 @@ onMounted(() => {
        </button>
     </div>
 
-    <!-- Inquiry List -->
-    <div class="space-y-4">
+    <!-- Inquiry List (Scrollable Container) -->
+    <div class="space-y-3 max-h-[640px] overflow-y-auto pr-2 custom-scrollbar -mt-1 pt-4">
        <!-- Loading Skeletons -->
        <template v-if="adminStore.loading && !filteredInquiries.length">
          <div v-for="i in 3" :key="i" class="bg-white p-6 rounded-[3px] border border-slate-100 shadow-sm animate-pulse flex items-center gap-6">
@@ -123,20 +210,21 @@ onMounted(() => {
         v-for="inquiry in filteredInquiries" 
         :key="inquiry.id"
         @click="openInquiry(inquiry)"
-        class="bg-white p-5 rounded-[3px] border border-slate-100 shadow-sm hover:shadow-xl hover:border-blue-100 transition-all group cursor-pointer relative"
+        class="bg-white px-5 py-3 rounded-[3px] border border-slate-100 shadow-sm hover:shadow-lg hover:border-blue-100 transition-all group cursor-pointer relative"
        >
-         <div v-if="inquiry.status === 'Active'" class="absolute left-0 top-0 w-1 h-full bg-blue-600"></div>
+         <div v-if="inquiry.status === 'Active'" class="absolute left-0 top-0 w-1.5 h-full bg-blue-600"></div>
          
-         <div class="flex items-center justify-between">
-            <div class="flex items-center gap-6 flex-1 min-w-0">
-               <div class="w-12 h-12 bg-slate-50 border border-slate-100 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
-                  <User size="24" />
+         <div class="flex items-center gap-6">
+            <!-- User Info (Fixed Width) -->
+            <div class="flex items-center gap-4 w-64 shrink-0">
+               <div class="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shrink-0">
+                  <User size="20" />
                </div>
-               <div class="space-y-1.5 flex-1 min-w-0">
-                  <div class="flex items-center gap-3">
-                     <h3 class="text-sm font-black text-slate-900 group-hover:text-blue-600 transition-colors">{{ inquiry.name }}</h3>
-                     <span 
-                      class="text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border"
+               <div class="min-w-0">
+                  <h3 class="text-[13px] font-black text-slate-900 truncate group-hover:text-blue-600 transition-colors">{{ inquiry.name || inquiry.fullName }}</h3>
+                  <div class="flex items-center gap-2">
+                    <span 
+                      class="text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest border"
                       :class="{
                         'bg-blue-50 text-blue-600 border-blue-100': inquiry.status === 'Active',
                         'bg-purple-50 text-purple-600 border-purple-100': inquiry.status === 'In Progress',
@@ -144,32 +232,40 @@ onMounted(() => {
                         'bg-emerald-50 text-emerald-600 border-emerald-100': inquiry.status === 'Resolved',
                         'bg-slate-50 text-slate-400 border-slate-100': inquiry.status === 'Read'
                       }"
-                     >
+                    >
                       {{ inquiry.status }}
-                     </span>
-                  </div>
-                  <div class="flex items-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                     <div class="flex items-center gap-2 truncate"><Mail size="12" class="text-slate-300"/> {{ inquiry.email }}</div>
-                     <div class="flex items-center gap-2"><Phone size="12" class="text-slate-300"/> {{ inquiry.mobile }}</div>
-                     <div class="flex items-center gap-2"><Calendar size="12" class="text-slate-300"/> {{ inquiry.date }}</div>
+                    </span>
                   </div>
                </div>
             </div>
-            
-            <div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-opacity">
-               <button 
-                @click.stop="adminStore.deleteInquiry(inquiry.id)"
-                class="bg-red-50 text-red-500 p-2.5 rounded-xl hover:bg-red-600 hover:text-white transition-all"
-                title="Purge Inquiry"
-               >
-                 <Trash2 size="16" />
-               </button>
-               <ChevronRight size="20" class="text-slate-200" />
-            </div>
-         </div>
 
-         <div class="mt-4 p-4 bg-slate-50/50 rounded-xl border border-slate-50 text-xs font-medium text-slate-500 italic truncate line-clamp-1 border-l-4 border-l-slate-200">
-            "{{ inquiry.message }}"
+            <!-- Metadata (Email/Phone) -->
+            <div class="flex items-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-72 shrink-0">
+               <div class="flex items-center gap-2 truncate"><Mail size="12" class="text-slate-300"/> {{ inquiry.email }}</div>
+               <div class="flex items-center gap-2 shrink-0"><Phone size="12" class="text-slate-300"/> {{ inquiry.mobile }}</div>
+            </div>
+
+            <!-- Message Preview (Flexible) -->
+            <div class="flex-1 min-w-0 px-4">
+              <p class="text-xs font-medium text-slate-500 italic truncate border-l-2 border-slate-100 pl-4 group-hover:border-blue-200 transition-colors">
+                "{{ inquiry.message }}"
+              </p>
+            </div>
+
+            <!-- Date & Actions -->
+            <div class="flex items-center gap-8 shrink-0">
+               <div class="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase"><Calendar size="12" class="text-slate-300"/> {{ inquiry.date || inquiry.createdAt ? new Date(inquiry.createdAt).toLocaleDateString() : 'Today' }}</div>
+               <div class="flex items-center gap-4 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                  <button 
+                    @click.stop="adminStore.deleteInquiry(inquiry.id)"
+                    class="bg-red-50 text-red-500 p-2 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                    title="Purge Inquiry"
+                  >
+                    <Trash2 size="14" />
+                  </button>
+                  <ChevronRight size="18" class="text-slate-200" />
+               </div>
+            </div>
          </div>
        </div>
     </div>
@@ -196,8 +292,15 @@ onMounted(() => {
 
           <!-- Modal Body -->
           <div class="p-10 space-y-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
-             <!-- Status Management Section -->
-             <div class="bg-blue-600/5 p-8 rounded-3xl border border-blue-100/50 flex items-center justify-between">
+             <div class="bg-blue-600/5 p-8 rounded-3xl border border-blue-100/50 flex items-center justify-between relative overflow-hidden">
+                <!-- Saving Overlay -->
+                <div v-if="isSaving" class="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center animate-in fade-in duration-300">
+                   <div class="flex items-center gap-3">
+                      <div class="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span class="text-[10px] font-black uppercase text-blue-600 tracking-[0.2em]">Synchronizing Data...</span>
+                   </div>
+                </div>
+
                 <div>
                    <p class="text-[9px] font-black uppercase text-blue-900 tracking-widest mb-1">Current Lifecycle Phase</p>
                    <div class="flex items-center gap-2">
@@ -208,8 +311,9 @@ onMounted(() => {
                 <div class="flex items-center gap-2">
                    <select 
                     :value="selectedInquiry?.status"
+                    :disabled="isSaving"
                     @change="updateStatus($event.target.value)"
-                    class="bg-white border border-blue-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-blue-900 outline-none cursor-pointer hover:border-blue-600 transition-colors shadow-sm"
+                    class="bg-white border border-blue-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-blue-900 outline-none cursor-pointer hover:border-blue-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-wait"
                    >
                       <option>Active</option>
                       <option>In Progress</option>
