@@ -30,6 +30,10 @@ const isUploading = ref(false)
 const searchQuery = ref('')
 const pollingId = ref(null)
 
+// Pagination
+const currentPage = ref(1)
+const itemsPerPage = 7
+
 const defaultForm = {
   title: '',
   message: '',
@@ -98,7 +102,15 @@ const filteredCampaigns = computed(() => {
   )
 })
 
-const paginatedCampaigns = computed(() => filteredCampaigns.value) // Simple for now
+const totalPages = computed(() => Math.ceil(filteredCampaigns.value.length / itemsPerPage))
+
+const paginatedCampaigns = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage
+  return filteredCampaigns.value.slice(start, start + itemsPerPage)
+})
+
+const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++ }
+const prevPage = () => { if (currentPage.value > 1) currentPage.value-- }
 
 // Methods
 const openCreateModal = () => {
@@ -211,16 +223,20 @@ const formatDate = (ts) => {
       <table class="w-full text-left border-collapse">
         <thead>
           <tr class="bg-slate-50/50 border-b-2 border-slate-100">
-            <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Campaign / Message</th>
-            <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Target / Channel</th>
-            <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
-            <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pulse</th>
-            <th class="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Timeline</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center w-16">#</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Campaign / Message</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Target / Channel</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Pulse</th>
+            <th class="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Timeline</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-50">
-          <tr v-for="notif in filteredCampaigns" :key="notif.SK" class="group hover:bg-slate-50/50 transition-colors">
-            <td class="px-8 py-6">
+          <tr v-for="(notif, idx) in paginatedCampaigns" :key="notif.SK" class="group hover:bg-slate-50/50 transition-colors">
+            <td class="px-6 py-4 text-center">
+               <span class="text-sm font-black text-black">{{ (currentPage - 1) * itemsPerPage + idx + 1 }}</span>
+            </td>
+            <td class="px-6 py-4">
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-200">
                    <img v-if="notif.imageUrl" :src="adminStore.resolveImageUrl(notif.imageUrl)" class="w-full h-full object-cover" />
@@ -232,12 +248,13 @@ const formatDate = (ts) => {
                 </div>
               </div>
             </td>
-            <td class="px-8 py-6">
+            <td class="px-6 py-4">
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-center gap-2">
                    <Users size="14" class="text-slate-400" />
                    <span class="text-sm font-bold text-slate-700">
                      {{ notif.targetType === 'all' ? 'Everyone' : 
+                        notif.targetType === 'employee' ? 'Employees Only' :
                         notif.targetType === 'gender' ? `Gender: ${notif.targetValue}` :
                         `Single: ${notif.targetValue}` }}
                    </span>
@@ -251,7 +268,7 @@ const formatDate = (ts) => {
                 </div>
               </div>
             </td>
-            <td class="px-8 py-6 text-center">
+            <td class="px-6 py-4 text-center">
               <span 
                 :class="['px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5', getStatusColor(notif.status)]"
               >
@@ -261,13 +278,13 @@ const formatDate = (ts) => {
                 {{ notif.status }}
               </span>
             </td>
-            <td class="px-8 py-6">
+            <td class="px-6 py-4">
               <div class="flex flex-col items-center">
                 <span class="text-xl font-black text-slate-900 leading-none">{{ notif.sentCount || 0 }}</span>
                 <span class="text-[9px] font-black text-slate-400 uppercase tracking-tighter mt-1">Recipients</span>
               </div>
             </td>
-            <td class="px-8 py-6">
+            <td class="px-6 py-4">
               <p class="text-xs font-bold text-slate-600 text-right">{{ formatDate(notif.created_at) }}</p>
             </td>
           </tr>
@@ -282,6 +299,32 @@ const formatDate = (ts) => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    <div v-if="totalPages > 1" class="mt-8 flex items-center justify-between bg-white p-6 rounded-[24px] border-2 border-slate-100 italic-gradient shadow-sm">
+      <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">
+        Page {{ currentPage }} of {{ totalPages }}
+      </div>
+      <div class="flex items-center gap-3">
+        <button 
+          @click="prevPage" 
+          :disabled="currentPage === 1"
+          class="px-5 py-2.5 bg-white border-2 border-slate-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-blue-600 disabled:opacity-30 transition-all hover:border-blue-100 shadow-sm"
+        >
+          Previous
+        </button>
+        <div class="flex items-center gap-1.5 px-4 font-mono text-xs font-bold text-slate-900 bg-slate-50 h-10 rounded-xl border border-slate-100">
+           {{ currentPage }}
+        </div>
+        <button 
+          @click="nextPage" 
+          :disabled="currentPage === totalPages"
+          class="px-5 py-2.5 bg-blue-600 border-2 border-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest text-white hover:bg-blue-700 disabled:opacity-30 transition-all shadow-lg shadow-blue-600/20"
+        >
+          Next
+        </button>
+      </div>
     </div>
 
     <!-- Create Broadcast Modal -->
@@ -379,15 +422,15 @@ const formatDate = (ts) => {
                     Target Audience
                   </h3>
 
-                  <div class="grid grid-cols-3 gap-3 mb-6">
+                  <div class="grid grid-cols-4 gap-2 mb-6">
                     <button 
-                      v-for="type in ['all', 'gender', 'single']"
+                      v-for="type in ['all', 'employee', 'gender', 'single']"
                       :key="type"
                       @click="form.targetType = type; form.targetValue = ''"
-                      class="px-3 py-4 rounded-2xl border-2 text-[10px] font-black uppercase tracking-widest transition-all"
+                      class="px-1 py-4 rounded-2xl border-2 text-[9px] font-black uppercase tracking-widest transition-all"
                       :class="form.targetType === type ? 'bg-black border-black text-white' : 'bg-white border-white text-slate-400 hover:border-slate-200'"
                     >
-                      {{ type }}
+                      {{ type === 'all' ? 'Everyone' : type }}
                     </button>
                   </div>
 
