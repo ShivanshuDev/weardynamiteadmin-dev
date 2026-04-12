@@ -25,16 +25,54 @@ const openOrderDetail = (order) => {
 }
 
 const dynamicStats = computed(() => {
-  const revenue = adminStore.orders.reduce((sum, o) => sum + (Number(o.totalAmount) || Number(o.total) || 0), 0)
-  const expenses = adminStore.expenses.reduce((sum, e) => sum + (e.amount || 0), 0)
-  const customers = adminStore.customers.length
-  const stock = adminStore.products.reduce((sum, p) => sum + (p.totalStock || 0), 0)
-
+  const stats = adminStore.dashboardStats || {}
+  
   return [
-    { name: 'Gross Revenue', value: `₹${revenue.toLocaleString()}`, change: 'Real-time', trend: 'neutral', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { name: 'Active Orders', value: adminStore.orders.length.toString(), change: 'Live', trend: 'neutral', icon: ShoppingCart, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { name: 'Total Burn', value: `₹${expenses.toLocaleString()}`, change: 'Real-time', trend: 'neutral', icon: Users, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { name: 'Current Stock', value: stock.toLocaleString(), change: 'Stable', trend: 'neutral', icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { 
+      name: 'Gross Revenue', 
+      value: `₹${(stats.grossRevenue || 0).toLocaleString()}`, 
+      change: 'Real-time', 
+      trend: 'neutral', 
+      icon: TrendingUp, 
+      color: 'text-blue-600', 
+      bg: 'bg-blue-50' 
+    },
+    { 
+      name: 'Active Orders', 
+      value: (stats.activeOrders || 0).toString(), 
+      change: 'Live', 
+      trend: 'neutral', 
+      icon: ShoppingCart, 
+      color: 'text-orange-600', 
+      bg: 'bg-orange-50' 
+    },
+    { 
+      name: 'Total Burn', 
+      value: `₹${(stats.totalBurn || 0).toLocaleString()}`, 
+      change: 'Real-time', 
+      trend: 'neutral', 
+      icon: ArrowDownRight, 
+      color: 'text-purple-600', 
+      bg: 'bg-purple-50' 
+    },
+    { 
+      name: 'Current Stock', 
+      value: (stats.currentStock || 0).toLocaleString(), 
+      change: 'Stable', 
+      trend: 'neutral', 
+      icon: Package, 
+      color: 'text-emerald-600', 
+      bg: 'bg-emerald-50' 
+    },
+    { 
+      name: 'Total Return', 
+      value: `₹${(stats.totalReturn || 0).toLocaleString()}`, 
+      change: 'Dynamic', 
+      trend: 'down', 
+      icon: ArrowUpRight, 
+      color: 'text-red-600', 
+      bg: 'bg-red-50' 
+    },
   ]
 })
 
@@ -50,11 +88,16 @@ const lowStockItems = computed(() => {
 const recentOrders = computed(() => (adminStore.orders || []).slice(0, 4))
 
 onMounted(async () => {
-  if (adminStore.products.length === 0) await adminStore.fetchProducts()
-  await adminStore.fetchOrders()
-  await adminStore.fetchSubscribers()
-  await adminStore.fetchInventoryReport()
-  await adminStore.fetchLedger()
+  // Parallel fetch for peak performance
+  await Promise.all([
+    adminStore.fetchDashboardStats(),
+    adminStore.fetchOrders(),
+    adminStore.fetchSubscribers(),
+    adminStore.fetchInventoryReport(),
+    adminStore.fetchLedger()
+  ])
+  
+  if (adminStore.products.length === 0) adminStore.fetchProducts()
   await adminStore.fetchDashboardAnalytics('2 Weeks')
 })
 </script>
@@ -76,27 +119,27 @@ onMounted(async () => {
     </div>
 
     <!-- Stats Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       <div 
         v-for="s in dynamicStats" 
         :key="s.name"
-        class="bg-white p-6 rounded-xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group"
+        class="bg-white p-5 rounded-xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group"
       >
-        <div class="flex items-center justify-between mb-4">
-          <div :class="[s.bg, s.color, 'p-4 rounded-2xl group-hover:scale-110 transition-transform']">
-            <component :is="s.icon" size="24" />
+        <div class="flex items-center justify-between mb-3">
+          <div :class="[s.bg, s.color, 'p-3 rounded-2xl group-hover:scale-110 transition-transform']">
+            <component :is="s.icon" size="20" />
           </div>
           <div 
-            class="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-1 rounded-full"
+            class="flex items-center gap-1 text-[9px] font-black uppercase px-2 py-1 rounded-full"
             :class="s.trend === 'up' ? 'bg-emerald-50 text-emerald-600' : (s.trend === 'down' ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400')"
           >
-            <ArrowUpRight v-if="s.trend === 'up'" size="12" />
-            <ArrowDownRight v-if="s.trend === 'down'" size="12" />
+            <ArrowUpRight v-if="s.trend === 'up'" size="10" />
+            <ArrowDownRight v-if="s.trend === 'down'" size="10" />
             {{ s.change }}
           </div>
         </div>
-        <p class="text-gray-400 text-[10px] font-black uppercase tracking-widest">{{ s.name }}</p>
-        <h3 class="text-2xl font-black text-slate-900 mt-1">{{ s.value }}</h3>
+        <p class="text-gray-400 text-[9px] font-black uppercase tracking-widest">{{ s.name }}</p>
+        <h3 class="text-xl font-black text-slate-900 mt-0.5">{{ s.value }}</h3>
       </div>
     </div>
 
