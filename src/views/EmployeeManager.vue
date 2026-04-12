@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { useAdminStore } from '../stores/adminStore'
 import api from '../utils/api'
 import { 
@@ -7,8 +7,10 @@ import {
   MoreVertical, Edit2, Trash2, Eye, UserPlus, 
   CheckCircle2, XCircle, Clock, DollarSign, ArrowUpRight,
   ChevronLeft, ChevronRight, Camera, ShieldCheck, FileDown,
-  Info, Briefcase, IdCard, Database, UserCheck
+  Info, Briefcase, IdCard, Database, UserCheck, X, ChevronDown, ShieldAlert, Mail
 } from 'lucide-vue-next'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const adminStore = useAdminStore()
 const activeTab = ref('employees')
@@ -26,22 +28,47 @@ const dropdownPosition = ref({ top: 0, left: 0, direction: 'down' })
 const isOvertimeInput = ref(false)
 const overtimeHours = ref(0)
 
+// Advanced Payroll State
+const showPaymentModal = ref(false)
+const selectedEmployeeForPayment = ref(null)
+const paymentForm = reactive({
+  amount: 0,
+  isAdvance: false,
+  month: 'April 2026',
+  note: '',
+  paymentMethod: 'Cash',
+  transactionId: '',
+  receiptUrl: ''
+})
+
 const showDetailsModal = ref(false)
 const selectedEmployeeForDetails = ref(null)
 const showPayrollHistoryModal = ref(false)
 const selectedEmployeeForPayroll = ref(null)
+const historyFilters = reactive({
+  search: '',
+  month: 'All'
+})
+const sendingEmail = ref(false)
 
 const openPayrollHistory = (emp) => {
   selectedEmployeeForPayroll.value = emp
+  historyFilters.search = ''
+  historyFilters.month = 'All'
   showPayrollHistoryModal.value = true
 }
 
 const payrollByEmployee = computed(() => {
   const groups = {}
   adminStore.payroll.forEach(p => {
-    const eid = String(p.employeeId)
-    if (!groups[eid]) groups[eid] = []
-    groups[eid].push(p)
+    // Aggressive normalization: Strip all WDTH/EMPLOYEE prefixes and compare raw numeric/ID strings
+    const rawId = String(p.employeeId || p.PK || p.id || '')
+      .replace('EMPLOYEE#', '')
+      .replace('WDTH', '')
+      .trim();
+    
+    if (!groups[rawId]) groups[rawId] = []
+    groups[rawId].push(p)
   })
   return groups
 })
@@ -73,6 +100,116 @@ const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
 const employeeTypes = ['Full-Time', 'Contract', 'Part-Time', 'Intern']
 const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
 const experienceLevels = ['Fresher', 'Experienced']
+
+const filteredPayoutHistory = computed(() => {
+  if (!selectedEmployeeForPayroll.value) return []
+  const eid = String(selectedEmployeeForPayroll.value.employeeId || selectedEmployeeForPayroll.value.id || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+  
+  return adminStore.payroll
+    .filter(p => {
+       const pEid = String(p.employeeId || p.PK || p.id || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+       const matchesEmp = pEid === eid
+       const matchesSearch = !historyFilters.search || 
+                             p.month.toLowerCase().includes(historyFilters.search.toLowerCase()) ||
+                             (p.transactionId && p.transactionId.toLowerCase().includes(historyFilters.search.toLowerCase()))
+       const matchesMonth = historyFilters.month === 'All' || p.month === historyFilters.month
+       return matchesEmp && matchesSearch && matchesMonth
+    })
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+})
+
+const historyMonths = computed(() => {
+  if (!selectedEmployeeForPayroll.value) return []
+  const eid = String(selectedEmployeeForPayroll.value.employeeId || selectedEmployeeForPayroll.value.id || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+  const months = new Set()
+  adminStore.payroll.forEach(p => {
+      const pEid = String(p.employeeId || p.PK || p.id || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+      if (pEid === eid) months.add(p.month)
+  })
+  return Array.from(months).sort()
+})
+
+const downloadPayrollPDF = (emp, records) => {
+  const doc = new jsPDF()
+  
+  // Header Minimalist (White background, Slate-Black text)
+  doc.setFillColor(255, 255, 255) 
+  doc.rect(0, 0, 210, 25, 'F')
+  
+  doc.setTextColor(15, 23, 42) // Slate 900
+  doc.setFontSize(22)
+  doc.setFont('helvetica', 'bold')
+  doc.text('WEARDYNAMITE', 20, 18)
+  
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139) // Slate 500
+  doc.text('INSTITUTIONAL PAYROLL LEDGER', 20, 26)
+  doc.text(`Generated: ${new Date().toLocaleString()}`, 140, 26)
+  
+  // Personnel Details (Shifted up due to reduced header)
+  doc.setTextColor(15, 23, 42)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Personnel: ${emp.name}`, 20, 45)
+  
+  doc.setFontSize(9)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(71, 85, 105) // Slate 600
+  doc.text(`Employee ID: ${emp.employeeId || 'N/A'}`, 20, 51)
+  doc.text(`Active Role: ${emp.role || 'Personnel'}`, 20, 57)
+  doc.text(`Bank Status: Account Linked`, 20, 63)
+  
+  // Table Data
+  const tableData = records.map(r => [
+    r.month,
+    r.isAdvance ? 'Advance' : 'Settlement',
+    r.createdAt ? new Date(r.createdAt).toLocaleDateString() : (r.date || '-'),
+    r.paymentMethod || 'Cash',
+    r.transactionId || '-',
+    `INR ${r.amount.toLocaleString()}`
+  ])
+  
+  autoTable(doc, {
+    startY: 75,
+    head: [['Period', 'Type', 'Date', 'Method', 'Reference ID', 'Amount']],
+    body: tableData,
+    theme: 'grid',
+    headStyles: { fillColor: [15, 23, 42], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+    styles: { fontSize: 8, cellPadding: 3 },
+    columnStyles: {
+      5: { halign: 'right', fontStyle: 'bold' }
+    }
+  })
+  
+  // Total Summary
+  const total = records.reduce((sum, r) => sum + Number(r.amount || 0), 0)
+  const finalY = doc.lastAutoTable.finalY + 10
+  
+  doc.setFont('helvetica', 'bold')
+  doc.text(`Total Disbursed: INR ${total.toLocaleString()}`, 140, finalY)
+  
+  doc.setFontSize(8)
+  doc.setTextColor(150, 150, 150)
+  doc.text('This is a computer generated document. Verifiability is maintained in the central vault.', 20, 280)
+  
+  doc.save(`Payroll_${emp.name.replace(/\s+/g, '_')}_${new Date().getTime()}.pdf`)
+  adminStore.showNotification('Success', 'Payout record exported to PDF.', 'success')
+}
+
+const sendLedgerEmail = async (emp) => {
+  if (sendingEmail.value) return
+  sendingEmail.value = true
+  try {
+    const eid = String(emp.employeeId || emp.id || '').replace('EMPLOYEE#', '').trim()
+    await api.post(`/admin/employees/${eid}/payroll/send-ledger`)
+    adminStore.showNotification('Email Sent', `Institutional ledger dispatched to ${emp.email}`, 'success')
+  } catch (error) {
+    adminStore.showNotification('Email Failed', 'Vault communications failure. Please try again.', 'error')
+  } finally {
+    sendingEmail.value = false
+  }
+}
 
 const stats = computed(() => {
   const today = new Date().toISOString().split('T')[0]
@@ -266,6 +403,27 @@ const handleFileUpload = async (event, fieldName) => {
   }
 }
 
+const handlePayrollAttachment = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  isUploading.value = true
+  try {
+    const eid = String(selectedEmployeeForPayment.value.employeeId || selectedEmployeeForPayment.value.id || '').replace('EMPLOYEE#', '')
+    const folder = `payroll/${eid}/${paymentForm.month.replace(/\s+/g, '_')}`
+    const fileName = `receipt_${Date.now()}`
+    const { uploadUrl, publicUrl } = await adminStore.getPresignedUrl(fileName, file.type, folder)
+    await adminStore.uploadToS3(uploadUrl, file)
+    paymentForm.receiptUrl = publicUrl
+    adminStore.showNotification('Success', 'Payment receipt uploaded successfully.', 'success')
+  } catch (error) {
+    console.error('Upload error:', error)
+    adminStore.showNotification('Upload Error', 'Failed to store digital receipt.', 'error')
+  } finally {
+    isUploading.value = false
+  }
+}
+
 const openDetailsModal = (emp) => {
   selectedEmployeeForDetails.value = emp
   showDetailsModal.value = true
@@ -415,6 +573,52 @@ const initiateOvertime = (e) => {
   isOvertimeInput.value = true
 }
 
+const calculatePrevMonthPaid = (emp, monthStr) => {
+  try {
+    const [mName, y] = monthStr.split(' ')
+    const targetDate = new Date(`${mName} 1, ${y}`)
+    targetDate.setMonth(targetDate.getMonth() - 1)
+    const prevMonthStr = `${targetDate.toLocaleString('default', { month: 'short' })} ${targetDate.getFullYear()}`
+    
+    const eid = String(emp.id || emp.employeeId).replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+    const matchingPayrolls = adminStore.payroll.filter(p => {
+       const pEid = String(p.employeeId || p.PK || p.id || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim()
+       return pEid === eid && p.month === prevMonthStr
+    })
+    
+    // If no data exists for the previous month, we don't assume a due
+    if (matchingPayrolls.length === 0) return null
+    return matchingPayrolls.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  } catch (e) {
+    return 0
+  }
+}
+
+const calculateDues = (emp, monthStr) => {
+  const daysInMonth = getDaysInMonth(selectedDate.value)
+  const [y, m] = selectedDate.value.split('-')
+  const monthIdx = parseInt(m)
+  const monthPrefix = `${y}-${String(monthIdx).padStart(2, '0')}`
+  
+  const presentDays = adminStore.attendance.filter(a => 
+    String(a.employeeId || '').replace('EMPLOYEE#', '').replace('WDTH', '').trim() === String(emp.id || emp.employeeId).replace('EMPLOYEE#', '').replace('WDTH', '').trim() && 
+    a.date.startsWith(monthPrefix) && 
+    (a.status === 'Present' || a.status === 'Overtime')
+  ).length
+
+  const currentEarnings = Math.round(((emp.salary || 0) / daysInMonth) * presentDays)
+  const totalPaidPrev = calculatePrevMonthPaid(emp, monthStr)
+  
+  // CarryForward Logic: Balanced based on Monthly CTC pool
+  const dueBalance = totalPaidPrev !== null ? (emp.salary - totalPaidPrev) : 0
+  
+  return {
+    gross: currentEarnings,
+    balance: dueBalance,
+    net: Math.max(0, currentEarnings + dueBalance)
+  }
+}
+
 const markAllPresent = async () => {
   const promises = adminStore.employees.map(emp => 
     adminStore.markAttendance({
@@ -439,34 +643,47 @@ const isSunday = (d) => {
   return date.getDay() === 0
 }
 
-const calculateDues = (emp, monthStr) => {
-  const [mName, y] = monthStr.split(' ')
-  const monthIdx = new Date(`${mName} 1, ${y}`).getMonth() + 1
-  const daysInMonth = new Date(Number(y), monthIdx, 0).getDate()
-  const monthPrefix = `${y}-${String(monthIdx).padStart(2, '0')}`
-  
-  const presentDays = adminStore.attendance.filter(a => 
-    String(a.employeeId) === String(emp.id || emp.employeeId) && 
-    a.date.startsWith(monthPrefix) && 
-    (a.status === 'Present' || a.status === 'Overtime')
-  ).length
-
-  return Math.round((emp.salary / daysInMonth) * presentDays)
+const openPaymentModal = (emp, month) => {
+  const dues = calculateDues(emp, month)
+  selectedEmployeeForPayment.value = emp
+  paymentForm.amount = dues.net
+  paymentForm.isAdvance = false
+  paymentForm.month = month
+  paymentForm.note = `Standard Salary Disbursement - ${month}`
+  showPaymentModal.value = true
 }
 
-const disbursePayroll = async (emp, month) => {
-  const amount = calculateDues(emp, month)
-  if (amount <= 0) {
-    return adminStore.showNotification('Payroll Alert', 'No dues calculated for this period based on attendance.', 'info')
+const submitPayment = async () => {
+  if (paymentForm.amount <= 0) {
+    return adminStore.showNotification('Validation Error', 'Disbursement amount must be greater than zero.', 'warning')
   }
-  
-  const payload = {
-    employeeId: emp.id || emp.employeeId,
-    month: month,
-    amount: amount,
-    note: `Attendance-based payout for ${month}`
+
+  const empId = selectedEmployeeForPayment.value.employeeId || selectedEmployeeForPayment.value.id || selectedEmployeeForPayment.value.PK?.split('#')[1];
+
+  // Strict Policy: Total disbursement must not exceed CTC
+  if (paymentForm.amount > Number(selectedEmployeeForPayment.value.salary || 0)) {
+     return adminStore.showNotification('Vault Compliance Warning', `Transaction amount (₹${paymentForm.amount}) violates policy. Maximum allowed is Monthly CTC (₹${selectedEmployeeForPayment.value.salary || 0}).`, 'error')
   }
-  await adminStore.disbursePayroll(payload)
+
+  try {
+    const payload = {
+      employeeId: empId,
+      month: paymentForm.month,
+      amount: paymentForm.amount,
+      isAdvance: paymentForm.isAdvance,
+      note: paymentForm.note,
+      paymentMethod: paymentForm.paymentMethod,
+      transactionId: paymentForm.transactionId,
+      receiptUrl: paymentForm.receiptUrl
+    }
+    
+    console.log('[PAYROLL ACTION] Submitting Payment Payload:', JSON.stringify(payload, null, 2));
+    
+    await adminStore.disbursePayroll(payload)
+    showPaymentModal.value = false
+  } catch (error) {
+    console.error('[PAYROLL ACTION] Submission failed:', error);
+  }
 }
 
 const getDaysInMonth = (dateStr) => {
@@ -492,16 +709,23 @@ const changeMonth = (delta) => {
 
 onMounted(() => {
   adminStore.fetchEmployees()
-  adminStore.fetchAttendanceByDate(selectedDate.value)
   adminStore.fetchPayroll()
+  
+  const d = new Date(selectedDate.value)
+  adminStore.fetchAttendanceMatrix(d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'))
   
   window.addEventListener('click', () => {
     activeDropdownCell.value = null
   })
 })
 
-watch(selectedDate, (newDate) => {
-  adminStore.fetchAttendanceByDate(newDate)
+watch(selectedDate, (newDate, oldDate) => {
+  const nM = newDate.substring(0, 7)
+  const oM = oldDate?.substring(0, 7)
+  if (nM !== oM) {
+    const d = new Date(newDate)
+    adminStore.fetchAttendanceMatrix(d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'))
+  }
 })
 </script>
 
@@ -901,11 +1125,13 @@ watch(selectedDate, (newDate) => {
         <table v-if="activeTab === 'payroll'" class="w-full text-left">
           <thead>
             <tr class="bg-slate-50/50 border-b border-slate-100">
-              <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest w-48">Personnel</th>
-              <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Active Period</th>
-              <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Current Dues</th>
-              <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Status</th>
-              <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Action</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest w-48">Personnel</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest">Active Period</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Gross Earned</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Prev Balance</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Net Payable</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Status</th>
+               <th class="px-8 py-4 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
@@ -930,11 +1156,26 @@ watch(selectedDate, (newDate) => {
                   <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">April 2026</span>
                 </td>
                 <td class="px-8 py-3 text-center">
-                  <p class="text-sm font-black text-slate-900 tracking-tighter">₹{{ calculateDues(emp, 'April 2026').toLocaleString() }}</p>
-                  <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Attendance-based</p>
+                   <p class="text-[12px] font-black text-slate-900 tracking-tighter">₹{{ calculateDues(emp, getMonthName(selectedDate)).gross.toLocaleString() }}</p>
                 </td>
                 <td class="px-8 py-3 text-center">
-                  <div v-if="adminStore.payroll.find(p => String(p.employeeId) === String(emp.id) && p.month === 'April 2026')" class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
+                   <div class="flex flex-col items-center">
+                      <p :class="[
+                        'text-[12px] font-black tracking-tighter',
+                        calculateDues(emp, getMonthName(selectedDate)).balance > 0 ? 'text-blue-600' : (calculateDues(emp, getMonthName(selectedDate)).balance < 0 ? 'text-rose-600' : 'text-slate-400')
+                      ]">
+                        {{ calculateDues(emp, getMonthName(selectedDate)).balance > 0 ? '+' : '' }}{{ calculateDues(emp, getMonthName(selectedDate)).balance.toLocaleString() }}
+                      </p>
+                      <span class="text-[8px] font-black uppercase text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">CarryForward</span>
+                   </div>
+                </td>
+                <td class="px-8 py-3 text-center">
+                   <div class="inline-block px-4 py-1.5 bg-emerald-50 border border-emerald-100 rounded-full">
+                      <p class="text-[13px] font-black text-emerald-600 tracking-tighter">₹{{ calculateDues(emp, getMonthName(selectedDate)).net.toLocaleString() }}</p>
+                   </div>
+                </td>
+                <td class="px-8 py-3 text-center">
+                  <div v-if="adminStore.payroll.find(p => String(p.employeeId) === String(emp.id) && p.month === 'April 2026' && !p.isAdvance)" class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">
                     Settled <CheckCircle2 size="10" />
                   </div>
                   <div v-else class="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest border border-blue-100">
@@ -943,14 +1184,11 @@ watch(selectedDate, (newDate) => {
                 </td>
                 <td class="px-8 py-3 text-right">
                   <button 
-                    v-if="!adminStore.payroll.find(p => String(p.employeeId) === String(emp.id) && p.month === 'April 2026')"
-                    @click.stop="disbursePayroll(emp, 'April 2026')"
-                    :disabled="calculateDues(emp, 'April 2026') <= 0"
-                    class="bg-blue-600 text-white px-5 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-blue-500/20"
+                    @click.stop="openPaymentModal(emp, 'April 2026')"
+                    class="bg-blue-600 text-white px-5 py-2 rounded-lg font-black text-[9px] uppercase tracking-widest hover:bg-black transition-all shadow-lg shadow-blue-500/20"
                   >
-                    Disburse
+                    Issue Payment
                   </button>
-                  <p v-else class="text-[9px] font-black text-emerald-500 uppercase italic tracking-widest">No Action Needed</p>
                 </td>
               </tr>
 
@@ -973,34 +1211,111 @@ watch(selectedDate, (newDate) => {
                   </div>
                   <div>
                      <h3 class="text-xl font-black uppercase italic tracking-tighter text-slate-900">{{ selectedEmployeeForPayroll.name }}</h3>
-                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-0.5">Disbursement Archive • ID: {{ selectedEmployeeForPayroll.employeeId }}</p>
+                      <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-0.5">
+                        Disbursement Archive • ID: {{ selectedEmployeeForPayroll.employeeId }} 
+                        <span class="text-slate-300 ml-2">Total Records: {{ adminStore.payroll.length }}</span>
+                      </p>
                   </div>
                </div>
-               <button @click="showPayrollHistoryModal = false" class="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-400"><XCircle size="32" /></button>
+               <div class="flex items-center gap-3">
+                  <button 
+                     @click="sendLedgerEmail(selectedEmployeeForPayroll)"
+                     :disabled="sendingEmail"
+                     class="p-2.5 bg-slate-900 text-white rounded-xl hover:bg-black transition-all shadow-lg shadow-black/20 disabled:opacity-50"
+                     title="Send Ledger via Email"
+                  >
+                     <Mail v-if="!sendingEmail" size="18" />
+                     <Clock v-else size="18" class="animate-spin" />
+                  </button>
+                  <button 
+                     @click="downloadPayrollPDF(selectedEmployeeForPayroll, filteredPayoutHistory)"
+                     class="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-black transition-all shadow-lg shadow-blue-500/20"
+                     title="Export Ledger to PDF"
+                  >
+                     <FileDown size="18" />
+                  </button>
+                  <button @click="showPayrollHistoryModal = false" class="p-2 hover:bg-slate-100 rounded-full transition-all text-slate-400"><XCircle size="32" /></button>
+               </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="px-8 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center gap-4">
+               <div class="relative flex-1">
+                  <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size="16" />
+                  <input 
+                     v-model="historyFilters.search"
+                     type="text" 
+                     placeholder="Search reference or month..."
+                     class="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                  />
+               </div>
+               <select 
+                  v-model="historyFilters.month"
+                  class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all appearance-none cursor-pointer"
+               >
+                  <option value="All">All Periods</option>
+                  <option v-for="m in historyMonths" :key="m" :value="m">{{ m }}</option>
+               </select>
             </div>
 
             <!-- Content -->
-            <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+            <div class="flex-1 overflow-y-auto custom-scrollbar p-8 pt-4">
                <div class="space-y-4">
-                  <div v-if="payrollByEmployee[selectedEmployeeForPayroll.id] && payrollByEmployee[selectedEmployeeForPayroll.id].length > 0" class="space-y-3">
+                  <div v-if="filteredPayoutHistory.length > 0" class="space-y-3">
                      <div 
-                        v-for="pay in payrollByEmployee[selectedEmployeeForPayroll.id]" 
+                        v-for="pay in filteredPayoutHistory" 
                         :key="pay.id"
-                        class="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm hover:border-blue-200 transition-all hover:translate-x-1"
+                        class="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col shadow-sm hover:border-blue-200 transition-all hover:translate-x-1"
                       >
-                        <div class="flex items-center gap-8">
-                          <div>
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Period</p>
-                            <p class="text-[11px] font-black text-slate-900 uppercase italic">{{ pay.month }}</p>
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-8">
+                            <div class="flex flex-col">
+                              <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Type & Method</p>
+                              <div class="flex items-center gap-1.5">
+                                <span :class="[
+                                  'inline-flex px-2 py-0.5 rounded text-[8px] font-black uppercase border',
+                                  pay.isAdvance ? 'bg-rose-50 text-rose-500 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                ]">
+                                  {{ pay.isAdvance ? 'Advance' : 'Settlement' }}
+                                </span>
+                                <span v-if="pay.paymentMethod" class="inline-flex px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
+                                  {{ pay.paymentMethod }}
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Period</p>
+                              <p class="text-[11px] font-black text-slate-900 uppercase italic">{{ pay.month }}</p>
+                            </div>
+                            <div>
+                              <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Settlement Date</p>
+                              <p class="text-[11px] font-black text-slate-900 uppercase">
+                                {{ pay.createdAt ? new Date(pay.createdAt).toLocaleDateString() : (pay.date || '-') }}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Settlement Date</p>
-                            <p class="text-[11px] font-black text-slate-900 uppercase">{{ pay.date }}</p>
+                          <div class="text-right">
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Amount Paid</p>
+                            <p class="text-base font-black text-slate-900 tracking-tighter">₹{{ pay.amount.toLocaleString() }}</p>
                           </div>
                         </div>
-                        <div class="text-right">
-                          <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Paid</p>
-                          <p class="text-base font-black text-emerald-600 tracking-tighter">₹{{ pay.amount.toLocaleString() }}</p>
+                        
+                        <!-- Transaction Reference & Receipt Attachment -->
+                        <div v-if="pay.transactionId || pay.receiptUrl" class="flex items-center justify-between mt-4 pt-4 border-t border-slate-50">
+                          <div v-if="pay.transactionId" class="flex items-center gap-2">
+                             <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                             <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ref:</span>
+                             <span class="text-[10px] font-bold text-slate-600 tracking-tight">{{ pay.transactionId }}</span>
+                          </div>
+                          <a 
+                            v-if="pay.receiptUrl" 
+                            :href="pay.receiptUrl" 
+                            target="_blank"
+                            class="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-100"
+                          >
+                             <Paperclip size="12" />
+                             <span class="text-[9px] font-black uppercase tracking-widest">View Receipt</span>
+                          </a>
                         </div>
                       </div>
                   </div>
@@ -1543,7 +1858,147 @@ watch(selectedDate, (newDate) => {
           </div>
         </div>
       </div>
-    </Teleport>
+     </Teleport>
+
+     <!-- Salary Disbursement Modal -->
+     <Teleport to="body">
+       <div v-if="showPaymentModal && selectedEmployeeForPayment" class="fixed inset-0 z-[150] flex items-center justify-center p-6">
+          <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-md" @click="showPaymentModal = false"></div>
+          <div class="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col">
+             <!-- Modal Header -->
+             <div class="p-8 pb-0 flex items-center justify-between">
+                <div>
+                   <h3 class="text-xl font-black uppercase italic tracking-tighter text-slate-900">Financial Disbursement</h3>
+                   <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Personnel: {{ selectedEmployeeForPayment.name }}</p>
+                </div>
+                <button @click="showPaymentModal = false" class="p-2 hover:bg-slate-100 rounded-full text-slate-400"><X size="24" /></button>
+             </div>
+
+             <div class="p-8 space-y-6">
+                <!-- Amount Entry -->
+                <div class="space-y-2">
+                   <div class="flex items-center justify-between">
+                      <label class="text-[10px] font-black text-slate-900 uppercase tracking-widest">Payout Amount (₹)</label>
+                      <span class="text-[9px] font-black text-blue-600 uppercase">CTC Limit: ₹{{ selectedEmployeeForPayment.salary.toLocaleString() }}</span>
+                   </div>
+                   <input 
+                      v-model.number="paymentForm.amount"
+                      type="number" 
+                      class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-2xl font-black text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                      placeholder="0.00"
+                   />
+                   <p v-if="paymentForm.amount > selectedEmployeeForPayment.salary" class="text-[9px] font-black text-rose-500 uppercase mt-1 italic">
+                     Warning: Disbursement exceeds Monthly CTC threshold.
+                   </p>
+                </div>
+
+                <!-- Payment Method -->
+                 <div class="grid grid-cols-2 gap-4">
+                    <button 
+                       @click="paymentForm.paymentMethod = 'Cash'"
+                       :class="[
+                          'p-4 rounded-2xl border transition-all flex flex-col items-center gap-2',
+                          paymentForm.paymentMethod === 'Cash' ? 'bg-black border-black text-white shadow-xl scale-[1.02]' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
+                       ]"
+                    >
+                       <DollarSign size="20" />
+                       <span class="text-[10px] font-black uppercase tracking-widest">Cash Payment</span>
+                    </button>
+                    <button 
+                       @click="paymentForm.paymentMethod = 'Online'"
+                       :class="[
+                          'p-4 rounded-2xl border transition-all flex flex-col items-center gap-2',
+                          paymentForm.paymentMethod === 'Online' ? 'bg-blue-600 border-blue-600 text-white shadow-xl scale-[1.02]' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
+                       ]"
+                    >
+                       <Briefcase size="20" />
+                       <span class="text-[10px] font-black uppercase tracking-widest">Online Transfer</span>
+                    </button>
+                 </div>
+
+                 <!-- Online Specifics -->
+                 <div v-if="paymentForm.paymentMethod === 'Online'" class="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                    <div class="space-y-2">
+                       <label class="text-[10px] font-black text-slate-900 uppercase tracking-widest">Transaction Reference</label>
+                       <input 
+                          v-model="paymentForm.transactionId"
+                          type="text" 
+                          class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-xs font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                          placeholder="Bank UTR / Transaction ID"
+                       />
+                    </div>
+                 </div>
+
+                 <!-- Attachment / Receipt -->
+                 <div class="space-y-4">
+                    <label class="text-[10px] font-black text-slate-900 uppercase tracking-widest">Payment Evidence / Receipt</label>
+                    <div class="flex items-center gap-4">
+                       <div 
+                          class="w-20 h-20 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0 group relative cursor-pointer"
+                          @click="$refs.receiptUpload.click()"
+                       >
+                          <img v-if="paymentForm.receiptUrl" :src="paymentForm.receiptUrl" class="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                          <div v-else class="flex flex-col items-center gap-1 text-slate-400">
+                             <Camera size="20" />
+                             <span class="text-[8px] font-black uppercase">Attach</span>
+                          </div>
+                          <div v-if="isUploading" class="absolute inset-0 bg-white/80 flex items-center justify-center">
+                             <div class="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                       </div>
+                       <div class="flex-1">
+                          <p class="text-[10px] font-black text-slate-900 uppercase">Screenshot or PDF</p>
+                          <p class="text-[9px] text-slate-400 font-medium uppercase mt-1 leading-relaxed">Securely stored in central vault for audit transparency.</p>
+                          <input type="file" ref="receiptUpload" class="hidden" @change="handlePayrollAttachment" accept="image/*,application/pdf" />
+                       </div>
+                    </div>
+                 </div>
+
+                 <!-- Salary Advance? -->
+                 <div class="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex items-center justify-between">
+                    <div>
+                       <h4 class="text-[11px] font-black text-indigo-900 uppercase tracking-tight">Salary Advance?</h4>
+                       <p class="text-[9px] text-indigo-400 font-black uppercase mt-0.5 tracking-tighter">If enabled, this will reduce from next month's salary.</p>
+                    </div>
+                    <button 
+                       @click="paymentForm.isAdvance = !paymentForm.isAdvance"
+                       :class="[
+                          'w-12 h-6 rounded-full relative transition-all duration-300 shadow-inner',
+                          paymentForm.isAdvance ? 'bg-indigo-600' : 'bg-slate-200'
+                       ]"
+                    >
+                       <div 
+                          :class="[
+                             'absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all duration-300 transform shadow-md',
+                             paymentForm.isAdvance ? 'translate-x-6' : 'translate-x-0'
+                          ]"
+                       ></div>
+                    </button>
+                 </div>
+
+                <!-- Narrative Memo -->
+                <div class="space-y-2">
+                   <label class="text-[10px] font-black text-slate-900 uppercase tracking-widest">Transaction Memo</label>
+                   <textarea 
+                      v-model="paymentForm.note"
+                      rows="2"
+                      class="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-xs font-bold text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all resize-none"
+                      placeholder="Add institutional narrative..."
+                   ></textarea>
+                </div>
+
+                <button 
+                   @click="submitPayment"
+                   class="w-full bg-black text-white py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-black/10 flex items-center justify-center gap-3"
+                   :disabled="adminStore.loading"
+                >
+                   <CreditCard size="18" />
+                   Confirm Disbursement
+                </button>
+             </div>
+          </div>
+       </div>
+     </Teleport>
   </div>
 </template>
 

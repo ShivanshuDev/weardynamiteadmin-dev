@@ -792,9 +792,13 @@ export const useAdminStore = defineStore('admin', {
     async addEmployee(employee) {
       try {
         const response = await api.post('/admin/employees', employee);
-        this.employees.unshift(response.data);
+        const record = {
+          ...response.data,
+          id: response.data.id || response.data.employeeId || response.data.PK?.split('#')[1]
+        };
+        this.employees.unshift(record);
         this.showNotification('Success', 'Personnel added to workforce.', 'success');
-        return response.data;
+        return record;
       } catch (error) {
         this.showNotification('Error', 'Failed to onboard personnel.', 'error');
         throw error;
@@ -900,9 +904,14 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.post('/admin/payroll', payrollData);
-        this.payroll.unshift(response.data);
+        const record = {
+          ...response.data,
+          id: response.data.id || response.data.payrollId || response.data.SK?.split('#')[1],
+          employeeId: response.data.employeeId || response.data.PK?.split('#')[1]
+        };
+        this.payroll.unshift(record);
         this.showNotification('Success', 'Payroll disbursed and Ledger updated.', 'success');
-        return response.data;
+        return record;
       } catch (error) {
         this.showNotification('Error', 'Failed to disburse payroll.', 'error');
         throw error;
