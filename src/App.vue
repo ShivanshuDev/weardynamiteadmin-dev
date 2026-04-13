@@ -4,10 +4,13 @@ import AdminSidebar from './components/AdminSidebar.vue'
 import ImagePreviewModal from './components/ImagePreviewModal.vue'
 import GlobalLoader from './components/GlobalLoader.vue'
 import NotificationModal from './components/NotificationModal.vue'
+import SplashScreen from './components/SplashScreen.vue'
 import { useAuthStore } from './stores/authStore'
 import { Menu } from 'lucide-vue-next'
+import { ref } from 'vue'
 
 const authStore = useAuthStore()
+const isAppLoading = ref(true)
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 
 // Global handling to prevent arrow keys from changing numeric input values
@@ -19,6 +22,11 @@ const handleGlobalKeydown = (e) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleGlobalKeydown)
+  
+  // High-fidelity entry delay
+  setTimeout(() => {
+    isAppLoading.value = false
+  }, 2000)
 })
 
 onUnmounted(() => {
@@ -28,6 +36,7 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-screen overflow-hidden bg-slate-950">
+    <SplashScreen :show="isAppLoading" />
     <!-- Sidebar -->
     <AdminSidebar v-if="isAuthenticated && authStore.sidebarVisible" />
     

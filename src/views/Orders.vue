@@ -102,7 +102,7 @@ const addItem = () => {
     size: '',
     color: '',
     discount: 0,
-    taxRate: 18
+    taxRate: 0
   })
 }
 
@@ -116,7 +116,7 @@ const onProductSelect = (item) => {
     item.productName = product.name
     item.price = product.mrp || product.price || 0
     item.discount = (product.mrp && product.salePrice) ? (product.mrp - product.salePrice) : 0
-    item.taxRate = product.taxRate || 18
+    item.taxRate = product.taxPercent || 0
     const { sizes, colors } = getAvailableVariants(item.productId)
     item.size = sizes[0] || 'M'
     item.color = colors[0] || 'Black'
@@ -135,9 +135,10 @@ watch(() => newOrderData.value.items, (items) => {
     const taxRate = Number(item.taxRate) || 0
     
     const base = (price - unitDisc) * qty
-    const tax = base * (taxRate / 100)
+    // Inclusive: Tax = Gross - (Gross / (1 + Rate/100))
+    const tax = base - (base / (1 + (taxRate / 100)))
     
-    subTotal += base
+    subTotal += (base - tax) // Display subtotal as taxable value
     totalTax += tax
     totalDisc += (unitDisc * qty)
   })
@@ -148,7 +149,7 @@ watch(() => newOrderData.value.items, (items) => {
 }, { deep: true })
 
 watch(() => [newOrderData.value.subtotal, newOrderData.value.tax], ([sub, tax]) => {
-  newOrderData.value.totalAmount = (Number(sub) || 0) + (Number(tax) || 0)
+  newOrderData.value.totalAmount = (Number(sub) || 0) + (Number(newOrderData.value.tax) || 0)
 })
 
 const handleCreateManualOrder = () => {
@@ -610,7 +611,7 @@ const exportOrdersToExcel = () => {
 
   filteredOrders.value.forEach(o => {
     const amt = Number(o.totalAmount || o.orderTotal || o.total || 0)
-    summary.totalDiscount += Number(o.totalDiscount || 0)
+    summary.totalDiscount += Number(o.discount_total || o.totalDiscount || 0)
     summary.totalValuation += amt
     const pay = o.paymentMethod || 'COD'
     summary.payment[pay] = (summary.payment[pay] || 0) + 1
@@ -708,7 +709,7 @@ const exportOrdersToExcel = () => {
         <td align="center">${o.paymentMethod || 'COD'}</td>
         <td align="center">${formatDateNumeric(o.createdAt || o.date)}</td>
         <td align="center"><b>${(o.status || 'PENDING').toUpperCase()}</b></td>
-        <td align="right">Rs. ${Number(o.totalDiscount || 0).toLocaleString()}</td>
+        <td align="right">Rs. ${Number(o.discount_total || o.totalDiscount || 0).toLocaleString()}</td>
         <td align="right"><b>Rs. ${Number(o.totalAmount || o.orderTotal || o.total || 0).toLocaleString()}</b></td>
       </tr>
     `

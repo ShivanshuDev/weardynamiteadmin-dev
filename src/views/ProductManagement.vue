@@ -6,7 +6,7 @@ import {
   X, ChevronLeft, ChevronRight, Image as ImageIcon, 
   DollarSign, Layers, Settings, Globe, Tag, Info, List,
   BarChart3, Download, FileText, Camera, Upload, RefreshCw,
-  ShoppingCart, Check, Zap
+  ShoppingCart, Check, Zap, Truck
 } from 'lucide-vue-next'
 import { QuillEditor } from '@vueup/vue-quill'
 import AnalyticsModal from '../components/AnalyticsModal.vue'
@@ -165,7 +165,7 @@ const newProduct = ref({
   mrp: 0,
   salePrice: 0,
   purchasePrice: 0,
-  taxPercent: 18,
+  taxPercent: 0,
   sku: '',
   barcode: '',
   stock: 0,
@@ -195,7 +195,9 @@ const newProduct = ref({
   codAvailable: false,
   codCouponApplicable: false,
   isFreshArrival: false,
-  isMostPopular: false
+  isMostPopular: false,
+  isShippingApplicable: false,
+  shippingCost: 29
 })
 
 // Taxonomy Logic Helpers
@@ -294,12 +296,13 @@ const openAddModal = () => {
   // Reset newProduct with explicit boolean defaults
   newProduct.value = {
     name: '', brand: 'Wear Dynamite', status: 'Draft', category: '', subCategory: '', gender: 'Men', description: '',
-    mrp: 0, salePrice: 0, purchasePrice: 0, taxPercent: 18, isTaxable: true, discountPercentage: 0, promotionType: 'None', discountCoupon: '',
+    mrp: 0, salePrice: 0, purchasePrice: 0, taxPercent: 0, isTaxable: true, discountPercentage: 0, promotionType: 'None', discountCoupon: '',
     sku: '', barcode: '', stock: 0, lowStockAlert: 10,
     primaryColor: '', primarySize: '', fit: '', neckType: '', occasion: '', images: [''], variants: [{ color: '', sizes: [{ size: '', stock: 0 }] }],
     keywords: [], seoTitle: '', seoDescription: '', urlHandle: '', specs: [], aboutThisItem: [], image: '',
     isReturnable: true, returnDays: 7, codAvailable: false, codCouponApplicable: false,
-    isFreshArrival: false, isMostPopular: false
+    isFreshArrival: false, isMostPopular: false,
+    isShippingApplicable: false, shippingCost: 29
   }
   showAddModal.value = true
 }
@@ -1348,19 +1351,60 @@ onMounted(() => {
                               v-if="newProduct.codAvailable"
                               @click="newProduct.codCouponApplicable = !newProduct.codCouponApplicable"
                               class="flex flex-col items-start p-4 rounded-2xl border transition-all text-left group animate-in slide-in-from-top-2 duration-300"
-                              :class="newProduct.codCouponApplicable ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
+                              :class="newProduct.codCouponApplicable ? 'bg-orange-50 border-orange-200 ring-2 ring-orange-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
                            >
                               <div class="flex items-center justify-between w-full mb-2">
-                                 <div class="p-2 rounded-lg" :class="newProduct.codCouponApplicable ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'">
+                                 <div class="p-2 rounded-lg" :class="newProduct.codCouponApplicable ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-500'">
                                     <Tag size="16" />
                                  </div>
-                                 <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.codCouponApplicable ? 'bg-purple-500' : 'bg-slate-300'">
+                                 <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.codCouponApplicable ? 'bg-orange-500' : 'bg-slate-300'">
                                     <div class="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300" :class="newProduct.codCouponApplicable ? 'left-4.5' : 'left-0.5'"></div>
                                  </div>
                               </div>
-                              <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.codCouponApplicable ? 'text-purple-900' : 'text-slate-700'">COD Coupons</span>
-                              <p class="text-[9px] font-bold mt-1" :class="newProduct.codCouponApplicable ? 'text-purple-600' : 'text-slate-400'">Allow coupons for COD</p>
+                              <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.codCouponApplicable ? 'text-orange-900' : 'text-slate-700'">Allow Coupons on COD</span>
+                              <p class="text-[9px] font-bold mt-1" :class="newProduct.codCouponApplicable ? 'text-orange-600' : 'text-slate-400'">Coupons valid for COD</p>
                            </button>
+
+                           <!-- Shipping Toggle & Cost -->
+                           <div class="space-y-4">
+                              <button 
+                                 @click="newProduct.isShippingApplicable = !newProduct.isShippingApplicable"
+                                 class="w-full flex flex-col items-start p-4 rounded-2xl border transition-all text-left group"
+                                 :class="newProduct.isShippingApplicable ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-500/10' : 'bg-slate-50 border-transparent hover:border-slate-200'"
+                              >
+                                 <div class="flex items-center justify-between w-full mb-2">
+                                    <div class="p-2 rounded-lg" :class="newProduct.isShippingApplicable ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'">
+                                       <Truck size="16" />
+                                    </div>
+                                    <div class="w-8 h-4 rounded-full relative transition-colors duration-300" :class="newProduct.isShippingApplicable ? 'bg-purple-500' : 'bg-slate-300'">
+                                       <div class="absolute top-0.5 w-3 h-3 bg-white rounded-full transition-all duration-300" :class="newProduct.isShippingApplicable ? 'left-4.5' : 'left-0.5'"></div>
+                                    </div>
+                                 </div>
+                                 <span class="text-[10px] font-black uppercase tracking-wider" :class="newProduct.isShippingApplicable ? 'text-purple-900' : 'text-slate-700'">Shipping Applicable</span>
+                                 <p class="text-[9px] font-bold mt-1" :class="newProduct.isShippingApplicable ? 'text-purple-600' : 'text-slate-400'">Charge shipping for this item</p>
+                              </button>
+
+                              <Transition
+                                 enter-active-class="transform transition ease-out duration-300"
+                                 enter-from-class="-translate-y-2 opacity-0"
+                                 enter-to-class="translate-y-0 opacity-100"
+                              >
+                                 <div v-if="newProduct.isShippingApplicable" class="p-4 bg-white border border-slate-100 rounded-2xl shadow-sm space-y-2">
+                                    <label class="text-[9px] font-black uppercase text-slate-400 tracking-widest">
+                                       Shipping Cost (₹)
+                                    </label>
+                                    <div class="relative">
+                                       <input 
+                                          v-model="newProduct.shippingCost" 
+                                          type="number" min="0" @keydown="e => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault()"
+                                          class="w-full p-3 bg-slate-50 rounded-xl border border-transparent focus:border-purple-500 outline-none font-black text-sm transition-all"
+                                          placeholder="29"
+                                       />
+                                       <span class="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase">₹</span>
+                                    </div>
+                                 </div>
+                               </Transition>
+                           </div>
                         </div>
                     </div>
                 </div>

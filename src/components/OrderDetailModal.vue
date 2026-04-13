@@ -108,73 +108,174 @@ const downloadInvoice = async (orderId) => {
     const order = props.order
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-    // ... (Keep existing PDF generation logic, updated with underscore fields)
-    // 1. Header
-    doc.setFillColor(0, 0, 0); doc.rect(20, 20, 10, 10, 'F')
-    doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.setFont('helvetica', 'bold')
-    doc.text('D', 24, 27)
+    // 1. Header (WEAR DYNAMITE)
+    doc.setFontSize(22); doc.setFont('times', 'bold'); doc.setTextColor(0, 0, 0)
+    doc.text('WEAR DYNAMITE', 15, 30)
+    
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    doc.text('Mahalia dhermer deoria,', 15, 36)
+    doc.text('Uttar Pradesh 274505', 15, 41)
+    doc.text('Phone: +91 8543996159', 15, 46)
+    doc.text('GSTIN: 09ABCDE1234F1Z5', 15, 51)
 
-    doc.setTextColor(0, 0, 0); doc.setFontSize(20); doc.setFont('helvetica', 'bolditalic')
-    doc.text('WEAR DYNAMITE', 35, 28)
+    // Header Right (ORDER INVOICE)
+    doc.setFontSize(22); doc.setFont('times', 'bold'); doc.setTextColor(0, 0, 0)
+    doc.text('ORDER INVOICE', 195, 30, { align: 'right' })
+    
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 150, 150)
+    doc.text('Order ID: ', 160, 38, { align: 'right' })
+    doc.text('Invoice Date: ', 160, 43, { align: 'right' })
+    doc.text('Payment Method: ', 160, 48, { align: 'right' })
+    
+    doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'bold')
+    doc.text(`${order.order_number || order.id}`, 195, 38, { align: 'right' })
+    
+    const orderDate = new Date(order.created_at || order.date)
+    const formattedDate = !isNaN(orderDate.getTime()) 
+      ? `${String(orderDate.getDate()).padStart(2, '0')}/${String(orderDate.getMonth() + 1).padStart(2, '0')}/${orderDate.getFullYear()}`
+      : (order.date || '-')
+    doc.text(`${formattedDate}`, 195, 43, { align: 'right' })
+    
+    const pMethod = order.payment_method === 'COD' ? 'CASH ON DELIVERY' : (order.payment_method || 'ONLINE PAYMENT').toUpperCase()
+    doc.text(`${pMethod}`, 195, 48, { align: 'right' })
 
-    doc.setFontSize(32); doc.setTextColor(240, 240, 240); doc.setFont('helvetica', 'bolditalic')
-    doc.text('ORDER INVOICE', 100, 45)
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.line(15, 58, 195, 58)
 
-    doc.setTextColor(0, 0, 0); doc.setFontSize(10); doc.setFont('helvetica', 'bold')
-    doc.text(`${order.order_number || order.id}`, 190, 52, { align: 'right' })
-    doc.setFontSize(8); doc.setTextColor(150, 150, 150)
-    doc.text(`${order.date}`, 190, 58, { align: 'right' })
+    // 2. Addressing
+    const addressY = 65
+    doc.setDrawColor(220, 220, 220); doc.setLineWidth(0.2)
+    doc.rect(15, addressY, 87, 35); doc.rect(108, addressY, 87, 35)
+    
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(150, 150, 150)
+    doc.text('BILLING ADDRESS', 20, addressY + 7); doc.text('SHIPPING ADDRESS', 113, addressY + 7)
+    doc.setDrawColor(240, 240, 240); doc.line(20, addressY + 10, 97, addressY + 10); doc.line(113, addressY + 10, 190, addressY + 10)
+    
+    doc.setFontSize(9); doc.setTextColor(0, 0, 0)
+    const bAddr = order.address || {}
+    doc.text(`${(order.customer_name || 'Customer').toUpperCase()}`, 20, addressY + 16, { maxWidth: 77 })
+    doc.setFont('helvetica', 'normal')
+    doc.text(`${bAddr.street || ''}`, 20, addressY + 21, { maxWidth: 77 })
+    doc.text(`${bAddr.city || ''}, ${bAddr.state || ''} ${bAddr.zip || ''}`, 20, addressY + 26, { maxWidth: 77 })
+    doc.text(`Phone: ${order.customer_phone || ''}`, 20, addressY + 31)
 
-    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3); doc.line(20, 65, 190, 65)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`${(order.customer_name || 'Customer').toUpperCase()}`, 113, addressY + 16, { maxWidth: 77 })
+    doc.setFont('helvetica', 'normal')
+    doc.text(`${bAddr.street || ''}`, 113, addressY + 21, { maxWidth: 77 })
+    doc.text(`${bAddr.city || ''}, ${bAddr.state || ''} ${bAddr.zip || ''}`, 113, addressY + 26, { maxWidth: 77 })
+    doc.text(`Phone: ${order.customer_phone || ''}`, 113, addressY + 31)
 
-    // Addressing
-    doc.setFontSize(7); doc.setTextColor(150, 150, 150); doc.text('BILLING TO', 110, 80)
-    doc.setTextColor(0, 0, 0); doc.setFontSize(9); doc.setFont('helvetica', 'bolditalic')
-    doc.text(`${(order.customer_name || 'Guest').toUpperCase()}`, 110, 87)
+    // 3. Items Table
+    let tableY = addressY + 45
+    const columns = {
+      sl: 15,
+      desc: 25,
+      qty: 103,
+      uPrice: 118,
+      taxable: 144,
+      total: 170,
+      end: 195
+    }
 
-    // Items
-    let yPos = 130
-    const colX = { desc: 20, qty: 105, price: 130, total: 170, end: 195 }
-    doc.setFillColor(245, 245, 245); doc.rect(colX.desc, yPos, colX.end - colX.desc, 10, 'F')
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0)
-    doc.text('DESCRIPTION', colX.desc + 2, yPos + 6)
-    doc.text('QTY', colX.qty + 5, yPos + 6, { align: 'center' })
-    doc.text('PRICE', colX.price + 10, yPos + 6, { align: 'center' })
-    doc.text('TOTAL', colX.total + 10, yPos + 6, { align: 'center' })
+    // Header Row
+    doc.setFillColor(248, 249, 250); doc.rect(15, tableY, 180, 10, 'F')
+    doc.setDrawColor(200, 200, 200); doc.rect(15, tableY, 180, 10)
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50)
+    doc.text('SL.', columns.sl + 5, tableY + 6, { align: 'center' })
+    doc.text('PRODUCT DESCRIPTION', columns.desc + 2, tableY + 6)
+    doc.text('QTY', columns.qty + 7.5, tableY + 6, { align: 'center' })
+    doc.text('UNIT PRICE', columns.uPrice + 13, tableY + 6, { align: 'center' })
+    doc.text('TAXABLE', columns.taxable + 13, tableY + 6, { align: 'center' })
+    doc.text('TOTAL', columns.total + 12.5, tableY + 6, { align: 'center' })
+    
+    // Vertical Lines in Header
+    const dividers = [columns.desc, columns.qty, columns.uPrice, columns.taxable, columns.total]
+    dividers.forEach(x => doc.line(x, tableY, x, tableY + 10))
 
-    yPos += 10
+    tableY += 10
     const items = order.items || []
-    items.forEach(item => {
-      doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-      doc.rect(colX.desc, yPos, colX.end - colX.desc, 10)
-      doc.text(`${item.product_name || item.name}`, colX.desc + 2, yPos + 6)
-      doc.text(`${item.quantity}`, colX.qty + 5, yPos + 6, { align: 'center' })
-      doc.text(`${Number(item.price).toFixed(2)}`, colX.price + 18, yPos + 6, { align: 'right' })
-      doc.setFont('helvetica', 'bold'); doc.text(`${Number(item.total_price || item.price * item.quantity).toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
-      yPos += 10
+    const taxPercent = Number(order.tax_percent || 0)
+
+    items.forEach((item, index) => {
+      const itemTotal = Number(item.total_price || (item.price * item.quantity))
+      const itemTaxable = itemTotal / (1 + (taxPercent / 100))
+      
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0)
+      doc.rect(15, tableY, 180, 15)
+      dividers.forEach(x => doc.line(x, tableY, x, tableY + 15))
+
+      doc.text(`${index + 1}`, columns.sl + 5, tableY + 8, { align: 'center' })
+      doc.text(`${item.product_name || item.name}`, columns.desc + 2, tableY + 6)
+      doc.setFontSize(7); doc.setTextColor(120, 120, 120)
+      doc.text(`Color: ${item.color || '-'}, Size: ${item.size || '-'}`, columns.desc + 2, tableY + 10)
+      doc.text(`For: ${item.for_whom || '-'}`, columns.desc + 2, tableY + 13)
+      
+      doc.setFontSize(8); doc.setTextColor(0, 0, 0)
+      doc.text(`${item.quantity}`, columns.qty + 7.5, tableY + 8, { align: 'center' })
+      doc.text(`Rs. ${Number(item.price).toFixed(2)}`, columns.uPrice + 24, tableY + 8, { align: 'right' })
+      doc.text(`Rs. ${itemTaxable.toFixed(2)}`, columns.taxable + 24, tableY + 8, { align: 'right' })
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Rs. ${itemTotal.toFixed(2)}`, columns.total + 23, tableY + 8, { align: 'right' })
+      
+      tableY += 15
     })
 
-    // Totals
+    // 4. Summary Section
+    tableY += 10
     const subtotal = Number(order.subtotal || 0)
-    const tax = Number(order.tax_total || 0)
-    const shipping = Number(order.shipping_total || 0)
     const discount = Number(order.discount_total || 0)
-    const grandTotal = Number(order.total_amount || order.total || 0)
+    const taxableValue = subtotal - discount - (Number(order.tax_total) || 0)
+    const summaryX = 145
 
-    doc.setFontSize(8); doc.setFont('helvetica', 'normal')
-    doc.text('SUBTOTAL', colX.total - 10, yPos + 6)
-    doc.text(`${subtotal.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
-    yPos += 7
-    doc.text('TAX', colX.total - 10, yPos + 6)
-    doc.text(`${tax.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
-    yPos += 7
-    doc.text('DISCOUNT', colX.total - 10, yPos + 6)
-    doc.text(`-${discount.toFixed(2)}`, colX.end - 2, yPos + 6, { align: 'right' })
-    yPos += 7
+    const addSummaryRow = (label, val, y, isBold = false, color = [0, 0, 0]) => {
+      doc.setFontSize(9); doc.setFont('helvetica', isBold ? 'bold' : 'normal'); doc.setTextColor(...color)
+      doc.text(label, summaryX, y)
+      doc.text(`Rs. ${Number(val).toFixed(2)}`, 195, y, { align: 'right' })
+    }
+
+    addSummaryRow('Subtotal (Gross):', subtotal, tableY + 5)
+    if (discount > 0) {
+      addSummaryRow('Discount Applied:', -discount, tableY + 11, true, [225, 29, 72])
+      tableY += 6
+    }
+    addSummaryRow('Total Taxable Value:', taxableValue, tableY + 11)
+    addSummaryRow(`CGST (${taxPercent / 2}%):`, order.cgst || 0, tableY + 17)
+    addSummaryRow(`SGST (${taxPercent / 2}%):`, order.sgst || 0, tableY + 23)
     
-    doc.setFont('helvetica', 'bold'); doc.rect(colX.desc, yPos, colX.end - colX.desc, 10)
-    doc.text('GRAND TOTAL (INR)', colX.total - 10, yPos + 6.5)
-    doc.text(`${grandTotal.toFixed(2)}`, colX.end - 2, yPos + 6.5, { align: 'right' })
+    let shippingLabel = 'Shipping:'
+    let shippingVal = Number(order.shipping_total || 0)
+    addSummaryRow(shippingLabel, shippingVal, tableY + 29)
+    
+    tableY += 35
+    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.line(summaryX, tableY, 195, tableY)
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text('Grand Total:', summaryX, tableY + 6)
+    doc.text(`Rs. ${Number(order.total_amount || order.total).toFixed(2)}`, 195, tableY + 6, { align: 'right' })
+
+    // 5. Footer (Declaration & Signature)
+    let footerY = tableY + 25
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0)
+    doc.text('Declaration', 15, footerY)
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    doc.text('We declare that this invoice shows the actual price of the goods described', 15, footerY + 5)
+    doc.text('and that all particulars are true and correct.', 15, footerY + 9)
+
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 0, 0)
+    doc.text('Authorized Signatory', 195, footerY + 7, { align: 'right' })
+    doc.setFont('helvetica', 'bold'); doc.text('WEAR DYNAMITE', 195, footerY + 14, { align: 'right' })
+    doc.line(160, footerY + 3, 195, footerY + 3)
+
+    // 6. Return Policy (Matches Storefront OL)
+    footerY += 25
+    doc.setFontSize(9); doc.setFont('times', 'bold'); doc.text('TERMS, CONDITIONS & RETURN POLICY', 15, footerY)
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100)
+    const terms = [
+      '1. Goods once sold can only be returned within 10 days of delivery, provided they are unused, unwashed, and in original packaging with tags intact.',
+      '2. In case of a defective item, please notify us within 48 hours to be eligible for a replacement or full refund.',
+      '3. All disputes are subject to Uttar Pradesh jurisdiction only.',
+      '4. For Cash on Delivery (COD) orders, payment must be handed strictly in cash to the delivery executive before the package is opened.'
+    ]
+    terms.forEach((line, i) => doc.text(line, 15, footerY + 5 + (i * 4), { maxWidth: 180 }))
 
     doc.save(`Invoice_${orderId}.pdf`)
   } catch (error) {
@@ -269,23 +370,31 @@ const downloadInvoice = async (orderId) => {
                  <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
                     <div class="bg-white p-10 rounded-[4px] border border-slate-100 shadow-sm space-y-8">
                        <h3 class="text-[11px] font-black uppercase text-slate-950 tracking-[0.2em]">Administrative Economics</h3>
-                       <div class="space-y-5">
-                          <div class="flex justify-between items-center text-[12px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>Raw Subtotal</span>
-                             <span class="text-slate-900 italic">₹{{ Number(cleanPrice(order?.subtotal)).toLocaleString() }}</span>
-                          </div>
-                          <div class="flex justify-between items-center text-[12px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>Statutory Tax</span>
-                             <span class="text-slate-900 italic">₹{{ Number(cleanPrice(order?.tax_total)).toLocaleString() }}</span>
-                          </div>
-                          <div class="flex justify-between items-center text-[12px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>Shipping Ledger</span>
-                             <span class="text-slate-900 italic">₹{{ Number(cleanPrice(order?.shipping_total)).toLocaleString() }}</span>
-                          </div>
-                          <div class="pt-8 mt-4 border-t-4 border-double border-slate-100 flex justify-between items-end">
-                             <span class="text-[11px] font-black uppercase text-slate-950 tracking-[0.2em]">Grand Settlement</span>
-                             <span class="text-4xl font-black text-slate-950 tracking-tighter italic leading-none">₹{{ Number(cleanPrice(order?.total_amount || order?.total)).toLocaleString() }}</span>
-                          </div>
+                       <div class="space-y-4">
+                           <div class="flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                              <span>Raw Subtotal</span>
+                              <span class="text-slate-900 italic">₹{{ Number(cleanPrice(order?.subtotal)).toLocaleString() }}</span>
+                           </div>
+                           <div v-if="order.discount_total > 0" class="flex justify-between items-center text-[11px] font-black text-red-500 uppercase tracking-widest">
+                              <span>Promotion Discount</span>
+                              <span class="italic">-₹{{ Number(cleanPrice(order?.discount_total)).toLocaleString() }}</span>
+                           </div>
+                           <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2 border-l-2 border-slate-100">
+                              <span>CGST ({{ Number(order?.tax_percent || 0) / 2 }}%)</span>
+                              <span class="text-slate-900">₹{{ Number(cleanPrice(order?.cgst)).toLocaleString() }}</span>
+                           </div>
+                           <div class="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2 border-l-2 border-slate-100">
+                              <span>SGST ({{ Number(order?.tax_percent || 0) / 2 }}%)</span>
+                              <span class="text-slate-900">₹{{ Number(cleanPrice(order?.sgst)).toLocaleString() }}</span>
+                           </div>
+                           <div class="flex justify-between items-center text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                              <span>Shipping Ledger</span>
+                              <span class="text-slate-900 italic">₹{{ Number(cleanPrice(order?.shipping_total)).toLocaleString() }}</span>
+                           </div>
+                           <div class="pt-6 mt-4 border-t-2 border-dashed border-slate-200 flex justify-between items-end">
+                              <span class="text-[11px] font-black uppercase text-slate-950 tracking-[0.2em]">Grand Settlement</span>
+                              <span class="text-4xl font-black text-slate-950 tracking-tighter italic leading-none">₹{{ Number(cleanPrice(order?.total_amount || order?.total)).toLocaleString() }}</span>
+                           </div>
                        </div>
                     </div>
 
