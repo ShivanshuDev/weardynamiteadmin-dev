@@ -16,8 +16,11 @@ import {
   History,
   TrendingUp,
   Globe,
-  Monitor
+  Monitor,
+  Eye,
+  EyeOff
 } from 'lucide-vue-next'
+import { reactive, ref } from 'vue'
 
 const authStore = useAuthStore()
 const user = computed(() => authStore.user || {
@@ -46,6 +49,35 @@ const recentActivity = [
   { action: 'System Sync', time: '3h', type: 'sync', target: 'Cloud Manifest v2' },
   { action: 'Price Override', time: '5h', type: 'override', target: 'Summer Shorts' },
 ]
+
+const showPass = reactive({
+  current: false,
+  new: false,
+  confirm: false
+})
+
+const passwordForm = reactive({
+  current: '',
+  new: '',
+  confirm: ''
+})
+
+const isChangingPassword = ref(false)
+
+const handlePasswordChange = async () => {
+  if (passwordForm.new !== passwordForm.confirm) {
+    return authStore.showNotification('Error', 'Confirm password does not match.', 'error')
+  }
+  // Logic for actual password change would go here
+  isChangingPassword.value = true
+  setTimeout(() => {
+    isChangingPassword.value = false
+    authStore.showNotification('Security Update', 'Access Key rotation successful.', 'success')
+    passwordForm.current = ''
+    passwordForm.new = ''
+    passwordForm.confirm = ''
+  }, 1500)
+}
 </script>
 
 <template>
@@ -139,6 +171,78 @@ const recentActivity = [
                </div>
             </div>
          </div>
+
+          <!-- Security & Access Control SECTION -->
+          <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden mb-6">
+            <div class="bg-slate-50/50 px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+               <h3 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Security & Access Control</h3>
+               <Lock size="14" class="text-slate-300" />
+            </div>
+            <div class="p-8">
+               <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div class="space-y-6">
+                     <div class="space-y-2">
+                        <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Current Access Key</label>
+                        <div class="relative group">
+                           <input 
+                              :type="showPass.current ? 'text' : 'password'" 
+                              v-model="passwordForm.current"
+                              class="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition-all shadow-inner-sm" 
+                              placeholder="••••••••" 
+                           />
+                           <button type="button" @click="showPass.current = !showPass.current" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
+                              <component :is="showPass.current ? EyeOff : Eye" size="18" />
+                           </button>
+                        </div>
+                     </div>
+                     <div class="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                        <p class="text-[10px] font-bold text-blue-600 leading-relaxed uppercase italic tracking-tight">
+                           Rotating your access key frequently is mandated by organizational security protocol level 7.
+                        </p>
+                     </div>
+                  </div>
+                  <div class="space-y-6">
+                     <div class="space-y-2">
+                        <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">New Access Key</label>
+                        <div class="relative group">
+                           <input 
+                              :type="showPass.new ? 'text' : 'password'" 
+                              v-model="passwordForm.new"
+                              class="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition-all shadow-inner-sm" 
+                              placeholder="••••••••" 
+                           />
+                           <button type="button" @click="showPass.new = !showPass.new" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
+                              <component :is="showPass.new ? EyeOff : Eye" size="18" />
+                           </button>
+                        </div>
+                     </div>
+                     <div class="space-y-2">
+                        <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Confirm New Key</label>
+                        <div class="relative group">
+                           <input 
+                              :type="showPass.confirm ? 'text' : 'password'" 
+                              v-model="passwordForm.confirm"
+                              class="w-full bg-slate-50 border border-slate-100 rounded-2xl py-4 px-6 text-sm font-bold outline-none focus:border-blue-500 focus:bg-white transition-all shadow-inner-sm" 
+                              placeholder="••••••••" 
+                           />
+                           <button type="button" @click="showPass.confirm = !showPass.confirm" class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
+                              <component :is="showPass.confirm ? EyeOff : Eye" size="18" />
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+               </div>
+               <div class="mt-8 flex justify-end pt-6 border-t border-slate-50">
+                  <button 
+                     @click="handlePasswordChange"
+                     :disabled="isChangingPassword"
+                     class="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/10 disabled:opacity-50"
+                  >
+                     {{ isChangingPassword ? 'ENCRYPTING...' : 'UPGRADE ACCESS KEY' }}
+                  </button>
+               </div>
+            </div>
+          </div>
 
          <!-- Quick Command Grid -->
          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
