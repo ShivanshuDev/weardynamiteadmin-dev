@@ -19,7 +19,8 @@ import {
   Building2,
   Receipt,
   PanelLeftClose,
-  Bell
+  Bell,
+  FileText
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -31,6 +32,7 @@ const menuItems = [
   { name: 'Products', path: '/products', icon: Package },
   { name: 'Orders', path: '/orders', icon: ShoppingCart },
   { name: 'Bulk Orders', path: '/bulk-orders', icon: Package },
+  { name: 'Quotations', path: '/quotations', icon: FileText },
   { name: 'Inventory', path: '/inventory', icon: Boxes },
   { 
     name: 'Financials', 
