@@ -7,8 +7,8 @@ import { Lock, Mail, Loader2, Sparkles, ShieldCheck, Eye, EyeOff } from 'lucide-
 const router = useRouter()
 const authStore = useAuthStore()
 
-const email = ref('admin@weardynamite.com')
-const password = ref('Admin@123')
+const email = ref('')
+const password = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
@@ -27,7 +27,7 @@ const handleLogin = async () => {
   
   try {
     await authStore.login(email.value, password.value)
-    router.push('/')
+    router.push(authStore.user?.role === 'idcardadmin' ? '/id-cards' : '/')
   } catch (err) {
     error.value = err.message
   } finally {
@@ -40,7 +40,7 @@ const handleGoogleLogin = async () => {
   error.value = ''
   try {
     await authStore.loginWithGoogle()
-    router.push('/')
+    router.push(authStore.user?.role === 'idcardadmin' ? '/id-cards' : '/')
   } catch (err) {
     error.value = err.message
   } finally {

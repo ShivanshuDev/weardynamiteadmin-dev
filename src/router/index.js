@@ -94,6 +94,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: () => import('../views/AdminProfile.vue')
+    },
+    {
+      path: '/id-cards',
+      name: 'id-cards',
+      component: () => import('../views/IDCardManager.vue')
     }
   ]
 })
@@ -104,7 +109,13 @@ router.beforeEach((to, from, next) => {
   if (!authStore.isAuthenticated && !to.meta.public) {
     next('/login')
   } else if (authStore.isAuthenticated && to.name === 'login') {
-    next('/')
+    if (authStore.user?.role === 'idcardadmin') {
+      next('/id-cards')
+    } else {
+      next('/')
+    }
+  } else if (authStore.isAuthenticated && authStore.user?.role === 'idcardadmin' && to.path !== '/id-cards' && to.path !== '/profile') {
+    next('/id-cards')
   } else {
     next()
   }

@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/authStore'
 import { 
@@ -20,7 +21,8 @@ import {
   Receipt,
   PanelLeftClose,
   Bell,
-  FileText
+  FileText,
+  Contact
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -44,6 +46,7 @@ const menuItems = [
     ]
   },
   { name: 'Workforce', path: '/employees', icon: Users },
+  { name: 'ID Card Generator', path: '/id-cards', icon: Contact },
   { name: 'Blog Engine', path: '/blog', icon: BookOpen },
   { name: 'Store CMS', path: '/content', icon: ImageIcon },
   { name: 'Inquiries', path: '/inquiries', icon: Mail },
@@ -51,6 +54,14 @@ const menuItems = [
   { name: 'Broadcasts', path: '/notifications', icon: Bell },
   { name: 'Policy Suite', path: '/policies', icon: ShieldAlert },
 ]
+
+const filteredMenuItems = computed(() => {
+  const role = authStore.user?.role
+  if (role === 'idcardadmin') {
+    return menuItems.filter(item => item.name === 'ID Card Generator')
+  }
+  return menuItems
+})
 
 const handleLogout = () => {
   authStore.logout()
@@ -83,7 +94,7 @@ const handleLogout = () => {
 
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-      <template v-for="item in menuItems" :key="item.path || item.name">
+      <template v-for="item in filteredMenuItems" :key="item.path || item.name">
         <!-- Group Header -->
         <div v-if="item.isGroup" class="pt-4 pb-2">
           <p class="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] px-4">{{ item.name }}</p>

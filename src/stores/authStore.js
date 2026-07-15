@@ -18,9 +18,18 @@ export const useAuthStore = defineStore('auth', () => {
   const login = async (email, password) => {
     try {
       // Hardcoded Admin Access
-      if (email === 'admin@weardynamite.com' && password === 'Admin@123') {
+      if (email === 'admin@weardynamite.com' && password === 'Admin@123321') {
         user.value = { email: 'admin@weardynamite.com', role: 'admin', name: 'Master Administrator' }
         token.value = 'admin-bypass-token-2026'
+        
+        localStorage.setItem('dynamite_admin_user', JSON.stringify(user.value))
+        localStorage.setItem('dynamite_admin_token', token.value)
+        return user.value
+      }
+
+      if (email === 'idcardadmin@weardynamite.com' && password === 'idcard') {
+        user.value = { email: 'idcardadmin@weardynamite.com', role: 'idcardadmin', name: 'ID Card Administrator' }
+        token.value = 'idcardadmin-bypass-token-2026'
         
         localStorage.setItem('dynamite_admin_user', JSON.stringify(user.value))
         localStorage.setItem('dynamite_admin_token', token.value)
