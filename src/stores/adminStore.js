@@ -6,6 +6,7 @@ export const useAdminStore = defineStore('admin', {
     // Website CMS Sections
     siteContent: {
       home: { 
+        topBanner: { image: '', link: '/shop' },
         carousel: [], 
         megaPromos: [], 
         videoBlock: { 
@@ -46,7 +47,8 @@ export const useAdminStore = defineStore('admin', {
         faq: { pageTitle: 'Frequently Asked Questions', items: [] },
         privacy: { pageTitle: 'Privacy Policy', content: '' },
         terms: { pageTitle: 'Terms of Service', subtitle: '', lastUpdated: '', items: [] }
-      }
+      },
+      gallery: []
     },
 
     // CRM & Business Data
@@ -1108,7 +1110,8 @@ export const useAdminStore = defineStore('admin', {
                   ? [{ title: 'Main Terms', content: data.policies.terms.content }] 
                   : (typeof data.policies?.terms === 'string' ? [{ title: 'Main Terms', content: data.policies.terms }] : []))
             }
-          }
+          },
+          gallery: Array.isArray(data.gallery) ? data.gallery : []
         };
       } catch (error) {
         console.error('Failed to fetch CMS:', error);
@@ -1215,6 +1218,63 @@ export const useAdminStore = defineStore('admin', {
         this.imagePreview.currentIndex = this.imagePreview.images.length - 1
       }
     },
+    // ─── ID Card Actions ──────────────────────────────────────────────────────────
+    async fetchIdCardConfig(schoolId = 'shaheed_inter_college') {
+      try {
+        const response = await api.get('/admin/id-cards/config', { params: { schoolId } })
+        return response.data
+      } catch (error) {
+        console.error('Failed to fetch ID Card config:', error)
+        throw error
+      }
+    },
+    async saveIdCardConfig(schoolId, config) {
+      try {
+        const response = await api.post('/admin/id-cards/config', { ...config, schoolId })
+        this.showNotification('Success', 'School config saved to cloud.', 'success')
+        return response.data
+      } catch (error) {
+        this.showNotification('Error', 'Failed to save config to cloud.', 'error')
+        throw error
+      }
+    },
+    async fetchIdCardStudents(filters) {
+      this.loading = true
+      try {
+        const response = await api.get('/admin/id-cards/students', { params: filters })
+        return response.data || []
+      } catch (error) {
+        console.error('Failed to fetch students:', error)
+        this.showNotification('Error', 'Failed to fetch student records from database.', 'error')
+        return []
+      } finally {
+        this.loading = false
+      }
+    },
+    async saveIdCardStudent(schoolId, student) {
+      try {
+        let response
+        if (student.studentId) {
+          response = await api.put(`/admin/id-cards/student/${student.studentId}`, { ...student, schoolId })
+        } else {
+          response = await api.post('/admin/id-cards/student', { ...student, schoolId })
+        }
+        return response.data
+      } catch (error) {
+        this.showNotification('Error', 'Failed to save student record to database.', 'error')
+        throw error
+      }
+    },
+    async deleteIdCardStudent(schoolId, studentId) {
+      try {
+        await api.delete(`/admin/id-cards/student/${studentId}`, { params: { schoolId } })
+        this.showNotification('Success', 'Student record deleted from database.', 'success')
+      } catch (error) {
+        this.showNotification('Error', 'Failed to delete student from database.', 'error')
+        throw error
+      }
+    },
+
     showNotification(title, message, type = 'info') {
       this.notification = {
         show: true,

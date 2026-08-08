@@ -34,6 +34,7 @@ const isUploadingSignature = ref(false)
 const editingIndex = ref(null)
 
 const schoolDetails = ref({
+  schoolId: 'shaheed_inter_college',
   name: 'शहीद इण्टर कालेज',
   address: 'मधुबन- मऊ, 221603',
   phone: '9415843245',
@@ -57,121 +58,16 @@ const studentForm = ref({
   photoUrl: ''
 })
 
-const studentsList = ref([
-  {
-    name: 'Anjali Kumari',
-    srNo: '35335',
-    fatherName: 'Pankaj Vishwakarma',
-    class: '9',
-    section: 'B',
-    dob: '27/01/2011',
-    phone: '9919289618',
-    address: 'Ahirauli, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Ruchi Maddheshiya',
-    srNo: '35340',
-    fatherName: 'Dilip Kumar Gupta',
-    class: '9',
-    section: 'B',
-    dob: '31/07/2011',
-    phone: '9506071012',
-    address: 'Usuri, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Gunjan Yadav',
-    srNo: '35336',
-    fatherName: 'Om Prakash Yadav',
-    class: '9',
-    section: 'B',
-    dob: '01/01/2012',
-    phone: '9005890569',
-    address: 'Sidha Ahilaspur, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Ragini',
-    srNo: '35341',
-    fatherName: 'Seeta ram',
-    class: '9',
-    section: 'B',
-    dob: '01/01/2011',
-    phone: '8808984313',
-    address: 'Sidha Ahilaspur, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Kumari Shivani Gond',
-    srNo: '35337',
-    fatherName: 'Atul Kumar',
-    class: '9',
-    section: 'B',
-    dob: '27/01/2013',
-    phone: '9565356709',
-    address: 'Sonadih, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Radha',
-    srNo: '35342',
-    fatherName: 'Ramlakshan',
-    class: '9',
-    section: 'B',
-    dob: '05/05/2010',
-    phone: '6387272566',
-    address: 'Kamrauli, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Mahima',
-    srNo: '35338',
-    fatherName: 'Ashwani Kumar',
-    class: '9',
-    section: 'B',
-    dob: '22/05/2013',
-    phone: '9889003378',
-    address: 'Katghara, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Rani',
-    srNo: '35343',
-    fatherName: 'Dinesh',
-    class: '9',
-    section: 'B',
-    dob: '05/01/2012',
-    phone: '9565265336',
-    address: 'Sidha Ahilaspur, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Anchal Verma',
-    srNo: '35343',
-    fatherName: 'Kanhaiya Verma',
-    class: '9',
-    section: 'B',
-    dob: '11/10/2011',
-    phone: '915362105',
-    address: 'Sidha Ahilaspur, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&h=150&fit=crop'
-  },
-  {
-    name: 'Afreen Jahan',
-    srNo: '35344',
-    fatherName: 'Muradan',
-    class: '9',
-    section: 'B',
-    dob: '16/01/2013',
-    phone: '9598027795',
-    address: 'Khirikotha, Madhuban, Mau -221603',
-    photoUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&h=150&fit=crop'
-  }
-])
-
+const studentsList = ref([])
 const selectedStudentIndex = ref(0)
-const searchQuery = ref('')
+
+const filters = ref({
+  class: '',
+  section: '',
+  name: '',
+  phone: '',
+  fatherName: ''
+})
 
 // Computed
 const selectedStudent = computed(() => {
@@ -237,16 +133,51 @@ const activePreviewStudent = computed(() => {
   }
 })
 
-const filteredStudents = computed(() => {
-  if (!studentsList.value) return []
-  if (!searchQuery.value) return studentsList.value
-  const query = searchQuery.value.toLowerCase()
-  return studentsList.value.filter(s => 
-    s.name && (s.name.toLowerCase().includes(query) ||
-    (s.srNo && s.srNo.toLowerCase().includes(query)) ||
-    (s.class && s.class.toLowerCase().includes(query)))
-  )
-})
+// Database fetch logic
+const fetchStudents = async () => {
+  const payload = {
+    schoolId: schoolDetails.value.schoolId,
+    class: filters.value.class,
+    section: filters.value.section,
+    name: filters.value.name,
+    phone: filters.value.phone,
+    fatherName: filters.value.fatherName
+  }
+  
+  // Remove empty values
+  Object.keys(payload).forEach(key => {
+    if (payload[key] === undefined || payload[key] === '') {
+      delete payload[key]
+    }
+  })
+
+  try {
+    const list = await adminStore.fetchIdCardStudents(payload)
+    studentsList.value = list
+  } catch (e) {
+    console.error('Failed to load students list:', e)
+  }
+}
+
+let fetchTimeout = null
+const debouncedFetch = () => {
+  if (fetchTimeout) clearTimeout(fetchTimeout)
+  fetchTimeout = setTimeout(() => {
+    fetchStudents()
+  }, 400)
+}
+
+let configTimeout = null
+const autoSaveConfig = () => {
+  if (configTimeout) clearTimeout(configTimeout)
+  configTimeout = setTimeout(async () => {
+    try {
+      await adminStore.saveIdCardConfig(schoolDetails.value.schoolId, schoolDetails.value)
+    } catch (e) {
+      console.error('Failed to auto-save school settings:', e)
+    }
+  }, 1000)
+}
 
 // Methods
 const handleTemplateUpload = async (event) => {
@@ -263,7 +194,7 @@ const handleTemplateUpload = async (event) => {
     await adminStore.uploadToS3(uploadUrl, file)
     schoolDetails.value.templateUrl = fileUrl
     adminStore.showNotification('Success', 'ID Card template uploaded successfully.', 'success')
-    saveToLocalStorage()
+    autoSaveConfig()
   } catch (error) {
     console.error('Template upload failed:', error)
     adminStore.showNotification('Upload Error', 'Failed to store template in S3. Using local preview.', 'warning')
@@ -300,15 +231,16 @@ const handleRowPhotoUpload = async (event, index) => {
   
   const localPreview = URL.createObjectURL(file)
   studentsList.value[index].photoUrl = localPreview
-  saveToLocalStorage()
   
   try {
     const fileName = `student_photo_${Date.now()}`
     const { uploadUrl, fileUrl } = await adminStore.getPresignedUrl(fileName, file.type, 'id-cards/photos')
     await adminStore.uploadToS3(uploadUrl, file)
     studentsList.value[index].photoUrl = fileUrl
-    adminStore.showNotification('Success', 'Student photo updated successfully.', 'success')
-    saveToLocalStorage()
+    
+    // Save student update to database
+    await adminStore.saveIdCardStudent(schoolDetails.value.schoolId, studentsList.value[index])
+    adminStore.showNotification('Success', 'Student photo updated successfully in database.', 'success')
   } catch (error) {
     console.error('Row photo upload failed:', error)
     adminStore.showNotification('Upload Error', 'Failed to store photo in S3. Using local preview.', 'warning')
@@ -329,7 +261,7 @@ const handleSignatureUpload = async (event) => {
     await adminStore.uploadToS3(uploadUrl, file)
     schoolDetails.value.signatureUrl = fileUrl
     adminStore.showNotification('Success', 'Signature uploaded successfully.', 'success')
-    saveToLocalStorage()
+    autoSaveConfig()
   } catch (error) {
     console.error('Signature upload failed:', error)
     adminStore.showNotification('Upload Error', 'Failed to store signature in S3. Using local preview.', 'warning')
@@ -338,7 +270,7 @@ const handleSignatureUpload = async (event) => {
   }
 }
 
-const addStudent = () => {
+const addStudent = async () => {
   // Validate that all fields are mandatory
   if (
     !studentForm.value.name ||
@@ -390,20 +322,21 @@ const addStudent = () => {
     srNo: srNoVal 
   }
   
-  if (editingIndex.value !== null) {
-    // Save edit
-    studentsList.value[editingIndex.value] = studentData
-    editingIndex.value = null
-    adminStore.showNotification('Success', 'Student record updated.', 'success')
-  } else {
-    // Add new (always at beginning of array - latest row always will be first)
-    studentsList.value.unshift(studentData)
-    selectedStudentIndex.value = 0
-    adminStore.showNotification('Success', 'Student record added successfully.', 'success')
+  try {
+    const saved = await adminStore.saveIdCardStudent(schoolDetails.value.schoolId, studentData)
+    if (editingIndex.value !== null) {
+      studentsList.value[editingIndex.value] = saved
+      editingIndex.value = null
+      adminStore.showNotification('Success', 'Student record updated in database.', 'success')
+    } else {
+      studentsList.value.unshift(saved)
+      selectedStudentIndex.value = 0
+      adminStore.showNotification('Success', 'Student record added successfully.', 'success')
+    }
+    clearForm()
+  } catch (e) {
+    console.error('Failed to save student:', e)
   }
-  
-  clearForm()
-  saveToLocalStorage()
 }
 
 const editStudent = (index) => {
@@ -417,14 +350,20 @@ const editStudent = (index) => {
   }
 }
 
-const deleteStudent = (index) => {
+const deleteStudent = async (index) => {
+  const student = studentsList.value[index]
+  if (!student || !student.studentId) return
+  
   if (confirm('Are you sure you want to delete this student record?')) {
-    studentsList.value.splice(index, 1)
-    if (selectedStudentIndex.value >= studentsList.value.length) {
-      selectedStudentIndex.value = Math.max(0, studentsList.value.length - 1)
+    try {
+      await adminStore.deleteIdCardStudent(schoolDetails.value.schoolId, student.studentId)
+      studentsList.value.splice(index, 1)
+      if (selectedStudentIndex.value >= studentsList.value.length) {
+        selectedStudentIndex.value = Math.max(0, studentsList.value.length - 1)
+      }
+    } catch (e) {
+      console.error('Delete student failed:', e)
     }
-    adminStore.showNotification('Success', 'Student record deleted.', 'success')
-    saveToLocalStorage()
   }
 }
 
@@ -443,12 +382,23 @@ const clearForm = () => {
   editingIndex.value = null
 }
 
-const clearAllStudents = () => {
+const clearAllStudents = async () => {
   if (confirm('Are you sure you want to clear all student records? This cannot be undone.')) {
-    studentsList.value = []
-    selectedStudentIndex.value = 0
-    adminStore.showNotification('Success', 'All records cleared.', 'success')
-    saveToLocalStorage()
+    try {
+      adminStore.loading = true
+      for (const s of studentsList.value) {
+        if (s.studentId) {
+          await adminStore.deleteIdCardStudent(schoolDetails.value.schoolId, s.studentId)
+        }
+      }
+      studentsList.value = []
+      selectedStudentIndex.value = 0
+      adminStore.showNotification('Success', 'All records cleared from database.', 'success')
+    } catch (e) {
+      console.error('Failed to clear students:', e)
+    } finally {
+      adminStore.loading = false
+    }
   }
 }
 
@@ -462,46 +412,22 @@ const triggerPrint = () => {
   window.print()
 }
 
-// Load persisted data if any
-onMounted(() => {
-  const savedSchool = localStorage.getItem('idcard_school')
-  const savedStudents = localStorage.getItem('idcard_students')
-  if (savedSchool) {
-    try {
-      const parsed = JSON.parse(savedSchool)
-      if (parsed && typeof parsed === 'object') {
-        schoolDetails.value = { ...schoolDetails.value, ...parsed }
-      }
-    } catch (e) {
-      console.error('Error parsing saved school details:', e)
+// Load persisted data from backend database
+onMounted(async () => {
+  try {
+    const config = await adminStore.fetchIdCardConfig(schoolDetails.value.schoolId)
+    if (config) {
+      schoolDetails.value = { ...schoolDetails.value, ...config }
     }
+  } catch (e) {
+    console.error('Error fetching school config:', e)
   }
-  if (savedStudents) {
-    try {
-      const parsed = JSON.parse(savedStudents)
-      if (Array.isArray(parsed)) {
-        studentsList.value = parsed.map(s => {
-          if (!s.srNo && s.rollNumber) {
-            s.srNo = s.rollNumber
-          }
-          return s
-        })
-      }
-    } catch (e) {
-      console.error('Error parsing saved student list:', e)
-    }
-  }
+  await fetchStudents()
 })
 
-// Auto-save changes locally so user doesn't lose data
-const saveToLocalStorage = () => {
-  localStorage.setItem('idcard_school', JSON.stringify(schoolDetails.value))
-  localStorage.setItem('idcard_students', JSON.stringify(studentsList.value))
-}
-
-const handleSync = () => {
-  saveToLocalStorage()
-  adminStore.showNotification('Success', 'Records synced and saved locally.', 'success')
+const handleSync = async () => {
+  await fetchStudents()
+  adminStore.showNotification('Success', 'Records synced with central database.', 'success')
 }
 </script>
 
@@ -650,7 +576,7 @@ const handleSync = () => {
                 <input 
                   type="checkbox" 
                   v-model="schoolDetails.showHeader"
-                  @change="saveToLocalStorage"
+                  @change="autoSaveConfig"
                   class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span class="text-xs font-black uppercase tracking-wider text-slate-500">Overlay Header & Footer</span>
@@ -676,7 +602,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">School Name</label>
               <input 
                 v-model="schoolDetails.name"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="Enter School Name"
               />
@@ -686,7 +612,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">School Address</label>
               <input 
                 v-model="schoolDetails.address"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="Enter Address"
               />
@@ -696,7 +622,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Contact Number</label>
               <input 
                 v-model="schoolDetails.phone"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="Enter Contact Number"
               />
@@ -706,7 +632,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Academic Session</label>
               <input 
                 v-model="schoolDetails.session"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="e.g. 2026-27"
               />
@@ -716,7 +642,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Signature Title</label>
               <input 
                 v-model="schoolDetails.principalTitle"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="e.g. Principal"
               />
@@ -727,7 +653,7 @@ const handleSync = () => {
               <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Start Serial No (Default)</label>
               <input 
                 v-model="schoolDetails.startSrNo"
-                @input="saveToLocalStorage"
+                @input="autoSaveConfig"
                 class="w-full bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all"
                 placeholder="e.g. 0001"
               />
@@ -1121,21 +1047,65 @@ const handleSync = () => {
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-50 pb-4">
         <div>
           <h3 class="text-sm font-black uppercase tracking-wider text-slate-800">Student Database</h3>
-          <p class="text-slate-400 text-xs font-semibold mt-0.5">Total records: {{ studentsList.length }} (Latest additions are shown first)</p>
+          <p class="text-slate-400 text-xs font-semibold mt-0.5">Total records: {{ studentsList.length }}</p>
         </div>
         <div class="flex items-center gap-3">
-          <input 
-            v-model="searchQuery"
-            class="bg-slate-50 px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:bg-white focus:border-blue-500 outline-none transition-all w-60"
-            placeholder="Search name, sr no, class..."
-          />
           <button 
             @click="clearAllStudents"
             :disabled="studentsList.length === 0"
             class="bg-red-50 text-red-600 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-red-600 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Clear All
+            Clear All Batch
           </button>
+        </div>
+      </div>
+
+      <!-- No-scan query filters -->
+      <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Search Name</label>
+          <input 
+            v-model="filters.name"
+            @input="debouncedFetch"
+            class="w-full bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:border-blue-500 outline-none transition-all"
+            placeholder="Name prefix..."
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Mobile No</label>
+          <input 
+            v-model="filters.phone"
+            @input="debouncedFetch"
+            class="w-full bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:border-blue-500 outline-none transition-all"
+            placeholder="Exact phone..."
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Father's Name</label>
+          <input 
+            v-model="filters.fatherName"
+            @input="debouncedFetch"
+            class="w-full bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:border-blue-500 outline-none transition-all"
+            placeholder="Father's name..."
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Class</label>
+          <input 
+            v-model="filters.class"
+            @input="debouncedFetch"
+            class="w-full bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:border-blue-500 outline-none transition-all"
+            placeholder="e.g. 9"
+          />
+        </div>
+        <div class="space-y-1">
+          <label class="text-[10px] font-black uppercase tracking-widest text-slate-400">Section</label>
+          <input 
+            v-model="filters.section"
+            @input="debouncedFetch"
+            class="w-full bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:border-blue-500 outline-none transition-all"
+            placeholder="e.g. B"
+          />
         </div>
       </div>
 
@@ -1157,8 +1127,8 @@ const handleSync = () => {
           </thead>
           <tbody class="divide-y divide-slate-50">
             <tr 
-              v-for="(student, idx) in filteredStudents" 
-              :key="student.srNo" 
+              v-for="(student, idx) in studentsList" 
+              :key="student.studentId || student.srNo" 
               class="group hover:bg-slate-50/50 transition-colors cursor-pointer"
               :class="selectedStudentIndex === idx ? 'bg-blue-50/20' : ''"
               @click="selectStudent(idx)"
@@ -1237,7 +1207,7 @@ const handleSync = () => {
             </tr>
 
             <!-- Empty database table -->
-            <tr v-if="filteredStudents.length === 0">
+            <tr v-if="studentsList.length === 0">
               <td colspan="9" class="text-center py-10 text-slate-400 font-bold text-xs">
                 No matching records found.
               </td>

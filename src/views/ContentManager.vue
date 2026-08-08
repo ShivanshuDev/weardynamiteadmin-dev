@@ -77,8 +77,10 @@ const handleFileUpload = async (event) => {
       const isPromo = typeof id === 'string' && id.startsWith('promo_')
       const isCategory = typeof id === 'string' && id.startsWith('category_')
       const isProcessHero = id === 'process_hero'
+      const isGallery = typeof id === 'string' && id.startsWith('gallery_')
+      const isTopBanner = id === 'top_banner'
       
-      let folder = isVideo ? 'cms/branding' : (isCategory ? 'cms/categories' : (isPromo ? 'cms/promos' : (isProcessHero ? 'cms/process' : 'cms/carousel')))
+      let folder = isVideo ? 'cms/branding' : (isCategory ? 'cms/categories' : (isPromo ? 'cms/promos' : (isProcessHero ? 'cms/process' : (isGallery ? 'cms/gallery' : (isTopBanner ? 'cms/banners' : 'cms/carousel')))))
       
       const fileName = file.name.replace(/\s/g, '_')
       const { uploadUrl, fileKey } = await adminStore.getPresignedUrl(fileName, file.type, folder)
@@ -97,6 +99,13 @@ const handleFileUpload = async (event) => {
       } else if (isCategory) {
          const idx = parseInt(id.split('_')[1])
          adminStore.siteContent.home.categories[idx].image = fileKey
+      } else if (isGallery) {
+         const idx = parseInt(id.split('_')[1])
+         adminStore.siteContent.gallery[idx].image = fileKey
+      } else if (isTopBanner) {
+         if (!adminStore.siteContent.home) adminStore.siteContent.home = {}
+         if (!adminStore.siteContent.home.topBanner) adminStore.siteContent.home.topBanner = { image: '', link: '/shop' }
+         adminStore.siteContent.home.topBanner.image = fileKey
       } else {
          // Carousel slide (index is directly passed as id for hero)
          adminStore.siteContent.home.carousel[id].image = fileKey
@@ -174,6 +183,32 @@ const clearSlideAsset = (index) => {
   adminStore.showNotification('Asset Cleared', 'The image reference has been removed.', 'info')
 }
 
+// Gallery Management
+const addGalleryItem = () => {
+  if (!adminStore.siteContent.gallery) {
+    adminStore.siteContent.gallery = []
+  }
+  adminStore.siteContent.gallery.unshift({
+    image: '',
+    title: 'New Gallery Item',
+    description: 'Beautiful capture of dynamite style...'
+  })
+}
+
+const removeGalleryItem = (index) => {
+  adminStore.siteContent.gallery.splice(index, 1)
+}
+
+const moveGalleryItem = (index, delta) => {
+  const item = adminStore.siteContent.gallery.splice(index, 1)[0]
+  adminStore.siteContent.gallery.splice(index + delta, 0, item)
+}
+
+const clearGalleryAsset = (index) => {
+  adminStore.siteContent.gallery[index].image = ''
+  adminStore.showNotification('Asset Cleared', 'The image reference has been removed.', 'info')
+}
+
 // Button Management
 const addButton = (slideIdx) => {
    const slide = adminStore.siteContent.home.carousel[slideIdx]
@@ -247,12 +282,16 @@ const tabs = [
   { id: 'collections', name: 'Collections', icon: Layers },
   { id: 'branding', name: 'Brand Hooks', icon: Layout },
   { id: 'process', name: 'Our Process', icon: Zap },
+  { id: 'gallery', name: 'Lookbook Gallery', icon: ImageIcon },
   { id: 'contact', name: 'Global Info', icon: Phone },
 ]
 
 onMounted(async () => {
   if (!adminStore.siteContent.home?.carousel?.length) {
     await adminStore.fetchCms()
+  }
+  if (adminStore.siteContent.home && !adminStore.siteContent.home.topBanner) {
+    adminStore.siteContent.home.topBanner = { image: '', link: '/shop' }
   }
 })
 </script>
@@ -302,6 +341,58 @@ onMounted(async () => {
     <!-- TAB: HOME (HERO & PROMOS) -->
     <div v-if="activeTab === 'home'" class="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
        
+       <!-- Top Hero Banner Management (Nykaa style) -->
+       <div class="bg-white p-10 rounded-3xl border border-slate-100 shadow-sm space-y-8">
+          <div class="flex items-center justify-between border-b border-slate-50 pb-6">
+             <div class="flex items-center gap-4">
+                <div class="bg-indigo-50 text-indigo-600 p-3 rounded-2xl"><ImageIcon size="20"/></div>
+                <div>
+                    <h3 class="text-sm font-black uppercase tracking-widest text-slate-800">Top Hero Promo Banner</h3>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Full-width visual banner displayed at the top of the homepage</p>
+                </div>
+             </div>
+             <button @click="handleSaveSection('home.topBanner')" class="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-600 transition-all shadow-lg active:scale-95">
+                <Save size="16"/>
+                Save Banner
+             </button>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+             <!-- Preview/Upload -->
+             <div class="space-y-4">
+                <div class="relative group/banner rounded-3xl overflow-hidden aspect-[21/9] shadow-lg bg-slate-900 border-2 border-slate-100">
+                   <img v-if="adminStore.siteContent?.home?.topBanner?.image" :src="adminStore.resolveImageUrl(adminStore.siteContent.home.topBanner.image)" class="w-full h-full object-cover" />
+                   <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+                       <ImageIcon size="32" stroke-width="1.5" />
+                       <span class="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">No Banner Image Assigned</span>
+                   </div>
+                   
+                   <!-- Overlay Actions -->
+                   <div class="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover/banner:opacity-100 transition-all duration-300">
+                       <button @click="triggerSlideUpload('top_banner')" class="bg-white text-black px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
+                           <UploadCloud size="14"/>
+                           Upload Banner Image
+                       </button>
+                   </div>
+                </div>
+                <div v-if="adminStore.siteContent?.home?.topBanner?.image" class="text-[9px] font-bold text-slate-400 truncate tracking-wider px-2">
+                  Asset Key: {{ adminStore.siteContent.home.topBanner.image }}
+                </div>
+             </div>
+
+             <!-- Link Configuration -->
+             <div class="space-y-4">
+                <div class="space-y-2">
+                   <label class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Click Navigation Link</label>
+                   <select v-model="adminStore.siteContent.home.topBanner.link" class="w-full bg-slate-50 px-4 py-3 rounded-xl text-sm font-bold border-none outline-none focus:ring-2 ring-indigo-500/10">
+                      <option v-for="link in pageLinks" :key="link.url" :value="link.url">{{ link.name }}</option>
+                   </select>
+                </div>
+                <p class="text-[11px] text-slate-400 font-medium">This banner contains no text overlays, functioning as a clean visual image billboard linking to your selected category or page.</p>
+             </div>
+          </div>
+       </div>
+
        <!-- Hero Carousel Management -->
        <div class="bg-white p-10 rounded-3xl border border-slate-100 shadow-sm space-y-10">
           <div class="flex items-center justify-between border-b border-slate-50 pb-8">
@@ -907,6 +998,80 @@ onMounted(async () => {
                 </RouterLink>
               </div>
            </div>
+       </div>
+    </div>
+
+    <!-- TAB: GALLERY LOOKBOOK -->
+    <div v-if="activeTab === 'gallery' && adminStore.siteContent.gallery" class="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+       <div class="flex items-center justify-between bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+          <div class="flex items-center gap-4">
+             <div class="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                <ImageIcon size="24" />
+             </div>
+             <div>
+                <h3 class="text-sm font-black uppercase tracking-widest text-slate-800">Visual Gallery Lookbook</h3>
+                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage lookbook imagery, titles, and descriptions</p>
+             </div>
+          </div>
+          <div class="flex items-center gap-4">
+             <button @click="handleSaveSection('gallery')" class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95 flex items-center gap-2">
+                 <Save size="18" />
+                 Save Gallery
+             </button>
+             <button @click="addGalleryItem" class="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg active:scale-95 flex items-center gap-2">
+                 <Plus size="18" />
+                 Add New Image
+             </button>
+          </div>
+       </div>
+
+       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div v-for="(item, idx) in adminStore.siteContent.gallery" :key="idx" class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-6 relative group">
+             <!-- Action buttons in corner -->
+             <div class="absolute right-4 top-4 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10">
+                <button @click="moveGalleryItem(idx, -1)" :disabled="idx === 0" class="p-2 bg-white hover:bg-blue-50 hover:text-blue-600 rounded-lg shadow-md disabled:opacity-30"><ChevronLeft size="14"/></button>
+                <button @click="moveGalleryItem(idx, 1)" :disabled="idx === adminStore.siteContent.gallery.length - 1" class="p-2 bg-white hover:bg-blue-50 hover:text-blue-600 rounded-lg shadow-md disabled:opacity-30"><ChevronRight size="14"/></button>
+                <button @click="removeGalleryItem(idx)" class="p-2 bg-white hover:bg-red-50 text-red-500 rounded-lg shadow-md"><Trash2 size="14"/></button>
+             </div>
+
+             <!-- Image Preview / Upload -->
+             <div class="relative group/asset rounded-2xl overflow-hidden aspect-[4/3] bg-slate-900 border border-slate-100">
+                <img v-if="item.image" :src="adminStore.resolveImageUrl(item.image)" class="w-full h-full object-cover group-hover/asset:scale-105 transition-transform duration-700" />
+                <div v-else class="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-2 p-4 text-center">
+                    <ImageIcon size="32" stroke-width="1.5" />
+                    <span class="text-[9px] font-black uppercase tracking-wider opacity-60">Visual Asset Required</span>
+                </div>
+                
+                <!-- Upload Overlay -->
+                <div class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover/asset:opacity-100 transition-all duration-300 gap-2">
+                    <button @click="triggerSlideUpload('gallery_' + idx)" class="bg-white text-black px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-xl">
+                        <UploadCloud size="14"/>
+                        {{ item.image ? 'Replace Image' : 'Upload Image' }}
+                    </button>
+                    <button v-if="item.image" @click="clearGalleryAsset(idx)" class="bg-red-600 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-xl">
+                        <Trash2 size="14"/>
+                        Clear Image
+                    </button>
+                </div>
+             </div>
+
+             <!-- Info fields -->
+             <div class="space-y-4">
+                <div class="space-y-1">
+                   <label class="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Entry Heading/Title</label>
+                   <input v-model="item.title" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl text-xs font-black outline-none border border-transparent focus:border-blue-100 transition-all" placeholder="Enter Title..." />
+                </div>
+                <div class="space-y-1">
+                   <label class="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400">Supporting Narrative</label>
+                   <textarea v-model="item.description" rows="2" class="w-full bg-slate-50 px-4 py-2.5 rounded-xl text-xs font-bold text-slate-500 leading-relaxed outline-none border border-transparent focus:border-blue-100 transition-all" placeholder="Enter Description..."></textarea>
+                </div>
+             </div>
+          </div>
+          <div v-if="!adminStore.siteContent.gallery.length" class="col-span-full text-center py-20 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+             <ImageIcon size="48" class="mx-auto text-slate-300 mb-4 animate-pulse" />
+             <p class="text-xs font-black uppercase tracking-widest text-slate-400">No Gallery Entries Configured</p>
+             <button @click="addGalleryItem" class="mt-4 bg-blue-600 hover:bg-black text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">Create First Entry</button>
+          </div>
        </div>
     </div>
 
