@@ -395,79 +395,106 @@ const generateQuotationPDF = (quote) => {
   const useBold = () => doc.setFont('Helvetica', 'bold')
   const useNormal = () => doc.setFont('Helvetica', 'normal')
 
-  // Colors
-  const primaryBlue = '#2563eb'
-  const textDark = '#0f172a'
-  const textMuted = '#64748b'
-  const borderLight = '#e2e8f0'
+  const drawHeader = () => {
+    // Header Banner
+    doc.setFillColor(255, 255, 255) // White
+    doc.rect(0, 0, 210, 28, 'F') // Reduced height from 40 to 28
 
-  // Header Banner
-  doc.setFillColor(15, 23, 42) // Slate-900
-  doc.rect(0, 0, 210, 40, 'F')
+    // Accent Line under banner
+    doc.setFillColor(234, 179, 8) // Gold-500
+    doc.rect(0, 28, 210, 1.5, 'F') // Moved from 40 to 28
 
-  // Accent Line under banner
-  doc.setFillColor(234, 179, 8) // Gold-500
-  doc.rect(0, 40, 210, 1.5, 'F')
+    // Logo & Title
+    doc.setTextColor(15, 23, 42) // Slate-900 (Black)
+    useBold()
+    doc.setFontSize(22)
+    doc.text('WEAR DYNAMITE', 15, 14) // Moved up from 22
+    
+    useNormal()
+    doc.setFontSize(9)
+    doc.setTextColor(71, 85, 105) // Slate-600
+    doc.text('Enterprise Apparel & Custom Printing Studio', 15, 20) // Moved up from 28
 
-  // Logo & Title
-  doc.setTextColor(255, 255, 255)
-  useBold()
-  doc.setFontSize(22)
-  doc.text('WEAR DYNAMITE', 15, 22)
-  
-  useNormal()
-  doc.setFontSize(9)
-  doc.setTextColor(148, 163, 184)
-  doc.text('Enterprise Apparel & Custom Printing Studio', 15, 28)
+    // Document Type Label Right Aligned
+    useBold()
+    doc.setFontSize(15)
+    doc.setTextColor(15, 23, 42) // Slate-900 (Black)
+    doc.text('PROFORMA QUOTATION', 195, 16, { align: 'right' }) // Moved up from 24
+  }
 
-  // Document Type Label Right Aligned
-  useBold()
-  doc.setFontSize(15)
-  doc.setTextColor(255, 255, 255)
-  doc.text('PROFORMA QUOTATION', 195, 24, { align: 'right' })
+  const drawQuoteInfo = (yPos) => {
+    // Left Card: Quote Info
+    doc.setFillColor(248, 250, 252) // slate-50
+    doc.rect(15, yPos, 85, 34, 'F')
+    doc.setFillColor(37, 99, 235) // primary-600
+    doc.rect(15, yPos, 1.5, 34, 'F') // left border stripe
+    
+    // Left Card Content
+    doc.setTextColor(15, 23, 42)
+    useBold()
+    doc.setFontSize(9)
+    doc.text('QUOTATION ESTIMATE', 20, yPos + 6)
+    
+    useNormal()
+    doc.setTextColor(71, 85, 105)
+    doc.setFontSize(8.5)
+    doc.text(`Reference ID:  ${quote.quotationId || 'DRAFT'}`, 20, yPos + 13)
+    doc.text(`Date Issued:   ${formatDate(quote.createdAt || Date.now())}`, 20, yPos + 19)
+    doc.text(`Valid Until:   ${formatDate(quote.expiryDate || (Date.now() + 15*24*60*60*1000))}`, 20, yPos + 25)
+    doc.text(`Issued By:     ${quote.createdBy || 'Admin'}`, 20, yPos + 31)
+  }
 
-  let y = 52
+  const drawClientInfo = (yPos) => {
+    // Right Card: Client Info
+    doc.setFillColor(248, 250, 252)
+    doc.rect(110, yPos, 85, 34, 'F')
+    doc.setFillColor(37, 99, 235)
+    doc.rect(110, yPos, 1.5, 34, 'F')
 
-  // --- Cards Layout: Left (Quote info), Right (Client info) ---
-  // Left Card: Quote Info
-  doc.setFillColor(248, 250, 252) // slate-50
-  doc.rect(15, y, 85, 34, 'F')
-  doc.setFillColor(37, 99, 235) // primary-600
-  doc.rect(15, y, 1.5, 34, 'F') // left border stripe
-  
-  // Left Card Content
-  doc.setTextColor(15, 23, 42)
-  useBold()
-  doc.setFontSize(9)
-  doc.text('QUOTATION ESTIMATE', 20, y + 6)
-  
-  useNormal()
-  doc.setTextColor(71, 85, 105)
-  doc.setFontSize(8.5)
-  doc.text(`Reference ID:  ${quote.quotationId || 'DRAFT'}`, 20, y + 13)
-  doc.text(`Date Issued:   ${formatDate(quote.createdAt || Date.now())}`, 20, y + 19)
-  doc.text(`Valid Until:   ${formatDate(quote.expiryDate || (Date.now() + 15*24*60*60*1000))}`, 20, y + 25)
-  doc.text(`Issued By:     ${quote.createdBy || 'Admin'}`, 20, y + 31)
+    // Right Card Content
+    doc.setTextColor(15, 23, 42)
+    useBold()
+    doc.setFontSize(9)
+    doc.text('CLIENT DETAILS', 115, yPos + 6)
 
-  // Right Card: Client Info
-  doc.setFillColor(248, 250, 252)
-  doc.rect(110, y, 85, 34, 'F')
-  doc.setFillColor(37, 99, 235)
-  doc.rect(110, y, 1.5, 34, 'F')
+    useNormal()
+    doc.setTextColor(71, 85, 105)
+    doc.setFontSize(8.5)
+    doc.text(`Name:    ${quote.customerName}`, 115, yPos + 13)
+    doc.text(`Email:   ${quote.customerEmail}`, 115, yPos + 19)
+    if (quote.customerPhone) doc.text(`Phone:   ${quote.customerPhone}`, 115, yPos + 25)
+    if (quote.companyName) doc.text(`Company: ${quote.companyName}`, 115, yPos + 31)
+  }
 
-  // Right Card Content
-  doc.setTextColor(15, 23, 42)
-  useBold()
-  doc.setFontSize(9)
-  doc.text('CLIENT DETAILS', 115, y + 6)
+  const drawTableHeader = (yPos) => {
+    doc.setFillColor(30, 41, 59) // Slate-800
+    doc.rect(15, yPos, 180, 9, 'F')
+    
+    useBold()
+    doc.setFontSize(8.5)
+    doc.setTextColor(255, 255, 255)
+    doc.text('S.NO', 18, yPos + 6)
+    doc.text('ITEM DESCRIPTION', 28, yPos + 6)
+    doc.text('QTY', 115, yPos + 6, { align: 'right' })
+    doc.text('RATE (INR)', 142, yPos + 6, { align: 'right' })
+    doc.text('GST', 165, yPos + 6, { align: 'right' })
+    doc.text('TOTAL (INR)', 192, yPos + 6, { align: 'right' })
+  }
 
-  useNormal()
-  doc.setTextColor(71, 85, 105)
-  doc.setFontSize(8.5)
-  doc.text(`Name:    ${quote.customerName}`, 115, y + 13)
-  doc.text(`Email:   ${quote.customerEmail}`, 115, y + 19)
-  if (quote.customerPhone) doc.text(`Phone:   ${quote.customerPhone}`, 115, y + 25)
-  if (quote.companyName) doc.text(`Company: ${quote.companyName}`, 115, y + 31)
+  const drawFooter = (pageNumber) => {
+    doc.setFont('Helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(156, 163, 175)
+    doc.text('This is a formal estimation quote generated digitally by Wear Dynamite Pro CMS.', 105, 282, { align: 'center' })
+    doc.text('It does not constitute a legal tax invoice. Subject to stock availability.', 105, 287, { align: 'center' })
+    doc.text(`Page ${pageNumber}`, 195, 287, { align: 'right' })
+  }
+
+  let y = 40 // Shifted up from 52
+
+  drawHeader()
+  drawQuoteInfo(y)
+  drawClientInfo(y)
 
   y += 44
 
@@ -510,26 +537,37 @@ const generateQuotationPDF = (quote) => {
   y += Math.max(billLines.length, shipLines.length) * 5 + 10
 
   // --- Items Table ---
-  // Table Header Block
-  doc.setFillColor(30, 41, 59) // Slate-800
-  doc.rect(15, y, 180, 9, 'F')
-  
-  useBold()
-  doc.setFontSize(8.5)
-  doc.setTextColor(255, 255, 255)
-  doc.text('ITEM DESCRIPTION', 18, y + 6)
-  doc.text('QTY', 115, y + 6, { align: 'right' })
-  doc.text('RATE (INR)', 142, y + 6, { align: 'right' })
-  doc.text('GST', 165, y + 6, { align: 'right' })
-  doc.text('TOTAL (INR)', 192, y + 6, { align: 'right' })
-
+  drawTableHeader(y)
   y += 9
   doc.setTextColor(51, 65, 85)
   useNormal()
 
+  let pageNum = 1
+  let itemsOnCurrentPage = 0
+
   quote.items.forEach((item, idx) => {
+    let maxItems = pageNum === 1 ? 16 : 22
+
+    if (itemsOnCurrentPage >= maxItems) {
+      drawFooter(pageNum)
+      doc.addPage()
+      pageNum++
+      itemsOnCurrentPage = 0
+      y = 40 // Shifted up from 52
+      
+      drawHeader()
+      drawQuoteInfo(y)
+      drawClientInfo(y) // Kept for symmetrical design
+      
+      y += 44
+      drawTableHeader(y)
+      y += 9
+      doc.setTextColor(51, 65, 85)
+      useNormal()
+    }
+
     // Zebra Stripe background
-    if (idx % 2 === 1) {
+    if (itemsOnCurrentPage % 2 === 1) {
       doc.setFillColor(248, 250, 252)
       doc.rect(15, y, 180, 8.5, 'F')
     }
@@ -538,16 +576,30 @@ const generateQuotationPDF = (quote) => {
     doc.setDrawColor(241, 245, 249)
     doc.line(15, y + 8.5, 195, y + 8.5)
 
-    doc.text(`${item.productName} (${item.color || 'Std'} / ${item.size || 'M'})`, 18, y + 5.5)
+    doc.text(String(idx + 1), 18, y + 5.5)
+    doc.text(`${item.productName} (${item.color || 'Std'} / ${item.size || 'M'})`, 28, y + 5.5)
     doc.text(String(item.quantity), 115, y + 5.5, { align: 'right' })
     doc.text(Number(item.unitPrice).toFixed(2), 142, y + 5.5, { align: 'right' })
     doc.text(`${item.taxPercent}%`, 165, y + 5.5, { align: 'right' })
     doc.text(Number(item.total).toFixed(2), 192, y + 5.5, { align: 'right' })
     
     y += 8.5
+    itemsOnCurrentPage++
   })
 
   y += 10
+
+  // If there is not enough space for totals block, move to new page
+  if (y > 235) {
+      drawFooter(pageNum)
+      doc.addPage()
+      pageNum++
+      y = 40 // Shifted up from 52
+      drawHeader()
+      drawQuoteInfo(y)
+      drawClientInfo(y)
+      y += 44
+  }
 
   // --- Terms & Totals block ---
   // Left: Business terms
@@ -606,12 +658,7 @@ const generateQuotationPDF = (quote) => {
   doc.text('GRAND TOTAL:', 125, totalsY + 32)
   doc.text(`INR ${Number(quote.grandTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 190, totalsY + 32, { align: 'right' })
 
-  // Footer note
-  doc.setFont('Helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(156, 163, 175)
-  doc.text('This is a formal estimation quote generated digitally by Wear Dynamite Pro CMS.', 105, 282, { align: 'center' })
-  doc.text('It does not constitute a legal tax invoice. Subject to stock availability.', 105, 287, { align: 'center' })
+  drawFooter(pageNum)
 
   return doc
 }

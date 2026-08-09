@@ -76,6 +76,16 @@ const router = createRouter({
       component: () => import('../views/BlogManager.vue')
     },
     {
+      path: '/memberships',
+      name: 'memberships',
+      component: () => import('../views/MembershipManager.vue')
+    },
+    {
+      path: '/gifts',
+      name: 'gifts',
+      component: () => import('../views/GiftManager.vue')
+    },
+    {
       path: '/policies',
       name: 'policies',
       component: () => import('../views/PolicyManager.vue')

@@ -8,7 +8,7 @@ import '../assets/blog-preview.css'
 
 const adminStore = useAdminStore()
 const activeView = ref('LIST') // 'LIST' | 'EDIT' | 'PREVIEW'
-const currentBlog = ref({ title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft' })
+const currentBlog = ref({ title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft', visibility: 'public' })
 const tagString = ref('')
 
 // Search, Filter & View State
@@ -72,7 +72,7 @@ const getStatusClass = (status) => {
 }
 
 const startNew = () => {
-  currentBlog.value = { title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft' }
+  currentBlog.value = { title: '', author: 'Shivanshu', content: '', image: '', status: 'Draft', visibility: 'public' }
   tagString.value = ''
   activeView.value = 'EDIT'
 }
@@ -291,6 +291,14 @@ onMounted(() => {
                      <div class="space-y-2">
                         <label class="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1">Story Headline</label>
                         <input v-model="currentBlog.title" type="text" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-blue-600/10 outline-none" placeholder="Enter high-impact headline..." />
+                     </div>
+
+                     <div class="col-span-2 md:col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Visibility</label>
+                        <select v-model="currentBlog.visibility" class="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:ring-2 focus:ring-blue-600/10 outline-none">
+                          <option value="public">Public (Everyone)</option>
+                          <option value="member_only">Members Only</option>
+                        </select>
                      </div>
 
                      <div class="grid grid-cols-2 gap-4">

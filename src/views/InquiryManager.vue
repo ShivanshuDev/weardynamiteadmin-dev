@@ -20,7 +20,7 @@ const downloadPDF = () => {
    const tableData = filteredInquiries.value.map(i => [
      i.name || i.fullName,
      i.email,
-     i.mobile,
+     i.mobile || i.phone,
      i.status,
      i.message, // Removed truncation to show full customer narrative
      i.date || (i.createdAt ? new Date(i.createdAt).toLocaleDateString() : 'N/A')
@@ -44,7 +44,7 @@ const downloadExcel = () => {
    const worksheet = XLSX.utils.json_to_sheet(filteredInquiries.value.map(i => ({
      Name: i.name || i.fullName,
      Email: i.email,
-     Mobile: i.mobile,
+     Mobile: i.mobile || i.phone,
      Status: i.status,
      Message: i.message,
      Date: i.date || (i.createdAt ? new Date(i.createdAt).toLocaleDateString() : 'N/A')
@@ -242,7 +242,7 @@ onMounted(() => {
             <!-- Metadata (Email/Phone) -->
             <div class="flex items-center gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest w-72 shrink-0">
                <div class="flex items-center gap-2 truncate"><Mail size="12" class="text-slate-300"/> {{ inquiry.email }}</div>
-               <div class="flex items-center gap-2 shrink-0"><Phone size="12" class="text-slate-300"/> {{ inquiry.mobile }}</div>
+               <div class="flex items-center gap-2 shrink-0"><Phone size="12" class="text-slate-300"/> {{ inquiry.mobile || inquiry.phone }}</div>
             </div>
 
             <!-- Message Preview (Flexible) -->
@@ -331,7 +331,7 @@ onMounted(() => {
                 </div>
                 <div class="space-y-2">
                    <label class="text-[10px] font-black uppercase text-slate-400">Mobile Identity</label>
-                   <p class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">{{ selectedInquiry?.mobile }}</p>
+                   <p class="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">{{ selectedInquiry?.mobile || selectedInquiry?.phone }}</p>
                 </div>
                 <div class="space-y-2">
                    <label class="text-[10px] font-black uppercase text-slate-400">Interaction Date</label>

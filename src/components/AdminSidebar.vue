@@ -22,7 +22,9 @@ import {
   PanelLeftClose,
   Bell,
   FileText,
-  Contact
+  Contact,
+  Crown,
+  Gift
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -51,6 +53,8 @@ const menuItems = [
   { name: 'Store CMS', path: '/content', icon: ImageIcon },
   { name: 'Inquiries', path: '/inquiries', icon: Mail },
   { name: 'Subscribers', path: '/subscribers', icon: UserPlus },
+  { name: 'Memberships', path: '/memberships', icon: Crown },
+  { name: 'Gifts & Vouchers', path: '/gifts', icon: Gift },
   { name: 'Broadcasts', path: '/notifications', icon: Bell },
   { name: 'Policy Suite', path: '/policies', icon: ShieldAlert },
 ]
