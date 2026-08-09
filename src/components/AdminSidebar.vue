@@ -56,6 +56,7 @@ const menuItems = [
   { name: 'Memberships', path: '/memberships', icon: Crown },
   { name: 'Gifts & Vouchers', path: '/gifts', icon: Gift },
   { name: 'Broadcasts', path: '/notifications', icon: Bell },
+  { name: 'Analytics', path: '/analytics', icon: BarChart3 },
   { name: 'Policy Suite', path: '/policies', icon: ShieldAlert },
 ]
 

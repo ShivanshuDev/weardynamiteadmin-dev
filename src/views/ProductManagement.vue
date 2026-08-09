@@ -1693,7 +1693,7 @@ onMounted(() => {
                       <img 
                         v-else 
                         :src="adminStore.resolveImageUrl(activePreviewImage)" 
-                        class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
+                        class="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105" 
                       />
                    </template>
                    <div v-else class="flex flex-col items-center gap-4 text-slate-300">
@@ -1739,6 +1739,14 @@ onMounted(() => {
                    <!-- Title & Identity -->
                    <div class="space-y-4 mb-8">
                       <h1 class="text-4xl font-black italic uppercase tracking-tighter text-slate-900 leading-[1.1]">{{ newProduct.name }}</h1>
+                      
+                      <!-- Product Rating -->
+                      <div class="flex items-center gap-1 mt-2">
+                         <Star size="16" class="fill-yellow-400 text-yellow-400" />
+                         <span class="text-sm font-black text-slate-900 ml-1">{{ newProduct.rating || newProduct.averageRating || '0.0' }}</span>
+                         <span class="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-2">Product Rating</span>
+                      </div>
+
                       <div class="flex flex-wrap items-center gap-4">
                          <div class="flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-lg">
                             <span class="text-[9px] font-black uppercase text-slate-400 font-mono">SKU</span>

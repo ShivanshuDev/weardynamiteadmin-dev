@@ -109,6 +109,11 @@ const router = createRouter({
       path: '/id-cards',
       name: 'id-cards',
       component: () => import('../views/IDCardManager.vue')
+    },
+    {
+      path: '/analytics',
+      name: 'analytics',
+      component: () => import('../views/AnalyticsView.vue')
     }
   ]
 })

@@ -371,7 +371,8 @@ const sendQuotationEmail = async (quoteId) => {
     let payload = {}
     if (quote) {
       const doc = generateQuotationPDF(quote)
-      payload.pdfBase64 = doc.output('base64')
+      const dataUri = doc.output('datauristring')
+      payload.pdfBase64 = dataUri.split(',')[1]
     }
     const { data } = await api.post(`/admin/quotations/${quoteId}/send`, payload)
     adminStore.showNotification('Email Dispatched', 'Successfully emailed the proforma quotation estimate to the client.', 'success')
