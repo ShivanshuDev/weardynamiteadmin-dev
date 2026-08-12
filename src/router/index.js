@@ -111,6 +111,11 @@ const router = createRouter({
       component: () => import('../views/IDCardManager.vue')
     },
     {
+      path: '/id-cards/builder',
+      name: 'id-cards-builder',
+      component: () => import('../views/IDCardTemplateBuilder.vue')
+    },
+    {
       path: '/analytics',
       name: 'analytics',
       component: () => import('../views/AnalyticsView.vue')
@@ -129,7 +134,7 @@ router.beforeEach((to, from, next) => {
     } else {
       next('/')
     }
-  } else if (authStore.isAuthenticated && authStore.user?.role === 'idcardadmin' && to.path !== '/id-cards' && to.path !== '/profile') {
+  } else if (authStore.isAuthenticated && authStore.user?.role === 'idcardadmin' && !to.path.startsWith('/id-cards') && to.path !== '/profile') {
     next('/id-cards')
   } else {
     next()

@@ -17,7 +17,8 @@ import {
   Layers, 
   Image as ImageIcon,
   ChevronDown,
-  Eye
+  Eye,
+  Settings
 } from 'lucide-vue-next'
 
 const adminStore = useAdminStore()
@@ -533,6 +534,13 @@ const handleSync = async () => {
         <p class="text-slate-500 font-bold text-sm uppercase tracking-widest mt-1">Batch generate A4 sheets containing exactly 10 vertical cards</p>
       </div>
       <div class="flex items-center gap-3">
+        <router-link
+          to="/id-cards/builder"
+          class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 flex items-center gap-2 transition-all shadow-md shadow-indigo-500/20"
+        >
+          <Settings size="14" />
+          Template Builder
+        </router-link>
         <button 
           @click="handleSync"
           class="bg-slate-800 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-900 flex items-center gap-2 transition-all shadow-md shadow-slate-900/10"
