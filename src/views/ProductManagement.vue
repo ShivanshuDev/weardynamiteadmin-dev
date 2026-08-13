@@ -202,14 +202,26 @@ const newProduct = ref({
 
 // Taxonomy Logic Helpers
 const getCategoriesForGender = (gender) => {
+  if (adminStore.siteContent?.home?.categoryBubbles?.length) {
+    return adminStore.siteContent.home.categoryBubbles.map(b => b.name)
+  }
   if (!gender || !PRODUCT_TAXONOMY[gender]) return []
   return Object.keys(PRODUCT_TAXONOMY[gender])
 }
 
 const getSubCategoriesForCategory = (item) => {
-  const gender = item.gender
   const category = item.category
-  if (!gender || !category || !PRODUCT_TAXONOMY[gender] || !PRODUCT_TAXONOMY[gender][category]) return []
+  if (!category) return []
+  
+  if (adminStore.siteContent?.home?.categoryBubbles?.length) {
+    const bubble = adminStore.siteContent.home.categoryBubbles.find(b => b.name === category)
+    if (bubble && bubble.subCategoriesText) {
+      return bubble.subCategoriesText.split(',').map(s => s.trim()).filter(s => s)
+    }
+  }
+
+  const gender = item.gender
+  if (!gender || !PRODUCT_TAXONOMY[gender] || !PRODUCT_TAXONOMY[gender][category]) return []
   return PRODUCT_TAXONOMY[gender][category]
 }
 

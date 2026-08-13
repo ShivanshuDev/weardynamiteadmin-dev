@@ -19,11 +19,16 @@ export const useAdminStore = defineStore('admin', {
           title: { text: '', color: '#ffffff', size: 32, bold: true },
           description: { text: '', color: '#ffffff', size: 14 }
         },
-        whatWeDo: {},
+        whatWeDo: { isVisible: true, title: '', subtitle: '', image: '', buttonText: '', buttonLink: '' },
         categories: [],
         trustFeatures: [],
         productSections: { newArrivals: {}, mostPopular: {} },
-        newsletter: {}
+        newsletter: {},
+        trendingPicks: { isVisible: true, title: '', subtitle: '', items: [] },
+        anatomyOfQuality: { isVisible: true, title: '', subtitle: '', items: [] },
+        shopTheAesthetic: { isVisible: true, title: '', subtitle: '', lookId: '', mainImage: '', hotspots: [] },
+        editorial: { isVisible: true, badge: '', tag: '', heading: '', text: '', image: '' },
+        galleryConfig: { isVisible: true, title: '', subtitle: '' }
       },
       standard: { features: [] },
       process: { 
